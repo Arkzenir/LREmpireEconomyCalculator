@@ -15,7 +15,7 @@ var state = {
     settlementType:       'Village',
     specialisation:       'none',
     population:           1,
-    nonMatchingResidents: 0,
+    taxModifierPercent: 0,
     playerName:           '',
     date:                 todayStr(),
   },
@@ -109,16 +109,16 @@ function rowToItem(row) {
     name:                (row[1]  || '').trim(),
     category:            (row[2]  || '').trim(),
     unit:                (row[3]  || '').trim(),
-    lastPrice:           numVal(row[4]),
-    currentPrice:        numVal(row[5]),
-    priceIndustrialTown: numVal(row[6]),
-    priceIndustrialCity: numVal(row[7]),
-    priceMarketTown:     numVal(row[8]),
-    priceMarketCity:     numVal(row[9]),
-    priceReligiousTown:  numVal(row[10]),
-    priceTempleCity:     numVal(row[11]),
-    limit:               limVal(row[12]),
-    buying:              (row[13] || '').trim().toLowerCase() !== 'no',
+    lastPrice:           numVal(row[5]),
+    currentPrice:        numVal(row[6]),
+    priceIndustrialTown: numVal(row[7]),
+    priceIndustrialCity: numVal(row[8]),
+    priceMarketTown:     numVal(row[9]),
+    priceMarketCity:     numVal(row[10]),
+    priceReligiousTown:  numVal(row[11]),
+    priceTempleCity:     numVal(row[12]),
+    limit:               limVal(row[13]),
+    buying:              (row[14] || '').trim().toLowerCase() !== 'no',
   };
 }
 
@@ -452,17 +452,15 @@ function renderCart() {
 var TAX_RATE = { Hamlet: 0, Village: 100, Town: 125, City: 150, Capital: 150 };
 var BUYBACK_CAP = { Village: 2.0, Town: 1.5, City: 1.0, Capital: 1.0 };
 var BUYBACK_RATE = { Village: 0.75, Town: 0.65, City: 0.55, Capital: 0.55 };
-var GOBLIN_EXEMPT = 3;
 
 function calcTax() {
   var type       = state.config.settlementType;
   var population = Math.max(1, parseInt(state.config.population, 10) || 1);
-  var residents  = Math.max(0, parseInt(state.config.nonMatchingResidents, 10) || 0);
+  var taxModPct  = Math.max(0, parseFloat(state.config.taxModifierPercent) || 0);
 
-  var taxableResidents = Math.max(0, residents - GOBLIN_EXEMPT);
-  var raceModifier     = taxableResidents * 0.05;
-  var baseTax          = (TAX_RATE[type] || 0) * population;
-  var finalTax         = baseTax * (1 + raceModifier);
+  var raceModifier = taxModPct / 100;
+  var baseTax      = (TAX_RATE[type] || 0) * population;
+  var finalTax     = baseTax * (1 + raceModifier);
 
   var accepted       = cart.filter(function(i) { return i.buying && i.quantity > 0; });
   var submittedValue = accepted.reduce(function(s, i) { return s + i.quantity * i.unitPrice; }, 0);
@@ -476,8 +474,8 @@ function calcTax() {
   }
 
   return {
-    type: type, population: population, residents: residents,
-    taxableResidents: taxableResidents, raceModifier: raceModifier,
+    type: type, population: population, taxModPct: taxModPct,
+    raceModifier: raceModifier,
     baseTax: baseTax, finalTax: finalTax, submittedValue: submittedValue,
     excessValue: excessValue, buybackCap: buybackCap,
     cappedSurplus: cappedSurplus, empirePayout: empirePayout,
@@ -520,9 +518,8 @@ function renderTaxCalc() {
           '<span class="calc-note">' + r.population + ' pop \u00D7 ' + (TAX_RATE[r.type] || 0) + '</span>' +
         '</div>' +
         '<div class="calc-row ' + (r.raceModifier > 0 ? '' : 'calc-row--muted') + '">' +
-          '<span class="calc-label">Race Modifier</span>' +
-          '<span class="calc-value">+' + pct(r.raceModifier) + '%</span>' +
-          '<span class="calc-note">' + r.taxableResidents + ' taxable (' + r.residents + ' \u2212 ' + Math.min(r.residents, 3) + ' exempt goblins)</span>' +
+          '<span class="calc-label">Tax Modifier</span>' +
+          '<span class="calc-value">+' + r.taxModPct.toFixed(1) + '%</span>' +
         '</div>' +
         '<div class="calc-row calc-row--total">' +
           '<span class="calc-label">Final Tax Due</span>' +
@@ -578,13 +575,11 @@ function ftaCutRate(ftaPrice) {
   return 0.40;
 }
 
-function snapLimit(v) {
-  return Math.round(Math.max(150, Math.min(450, v)) / 50) * 50;
-}
+
 
 function calcFTA() {
   var population   = Math.max(1, parseInt(state.config.population, 10) || 1);
-  var perPersonLim = snapLimit(parseInt(state.ftaConfig.perPersonLimit, 10) || 150);
+  var perPersonLim = Math.max(0, parseInt(state.ftaConfig.perPersonLimit, 10) || 0);
   var weeklyCap    = perPersonLim * population;
 
   var accepted  = cart.filter(function(i) { return i.buying && i.quantity > 0; });
@@ -594,14 +589,13 @@ function calcFTA() {
   var cutRate   = ftaCutRate(ftaPrice);
   var yourCut   = ftaPrice * (1 - cutRate);
   var ftaCut    = ftaPrice * cutRate;
-  var loyaltyTier  = Math.round((perPersonLim - 150) / 50);
   var capExceeded  = baseTotal > weeklyCap;
 
   return {
     population: population, perPersonLim: perPersonLim, weeklyCap: weeklyCap,
     baseTotal: baseTotal, ftaPrice: ftaPrice,
     cutRate: cutRate, yourCut: yourCut, ftaCut: ftaCut,
-    loyaltyTier: loyaltyTier, capExceeded: capExceeded,
+    capExceeded: capExceeded,
   };
 }
 
@@ -636,7 +630,6 @@ function renderFTACalc() {
         '<div class="calc-row">' +
           '<span class="calc-label">Per-Person Limit</span>' +
           '<span class="calc-value">' + r.perPersonLim + ' coins</span>' +
-          '<span class="calc-note">Loyalty Tier ' + r.loyaltyTier + '/6</span>' +
         '</div>' +
         '<div class="calc-row">' +
           '<span class="calc-label">Weekly Cap</span>' +
@@ -729,7 +722,7 @@ function generateTaxForm(r) {
     padStr('Total Declared Value:', fmt(r.submittedValue) + ' coins') + '\n\n' +
     FORM_LINE + '\n' +
     padStr('Base Tax:', fmt(r.baseTax) + ' coins') + '\n' +
-    padStr('Race Modifier:', '+' + (r.raceModifier * 100).toFixed(0) + '%') + '\n' +
+    padStr('Tax Modifier:', '+' + r.taxModPct.toFixed(1) + '%') + '\n' +
     padStr('Final Tax Due:', fmt(r.finalTax) + ' coins') + '\n' +
     padStr('Tax Paid:', fmt(Math.min(r.submittedValue, r.finalTax)) + ' coins') + '\n';
 
@@ -777,8 +770,7 @@ function generateFTAForm(r) {
     padStr('  FTA Cut (' + pct(r.cutRate) + '%):', fmt(r.ftaCut) + ' coins') + '\n\n' +
     FORM_LINE + '\n' +
     padStr('Weekly Limit Used:', fmt(r.baseTotal) + ' / ' + fmt(r.weeklyCap) + (r.capExceeded ? '  \u26A0 EXCEEDED' : '')) + '\n' +
-    padStr('Per-Person Limit:', r.perPersonLim + ' coins') + '\n' +
-    padStr('Loyalty Tier:', r.loyaltyTier + ' / 6') + '\n\n' +
+    padStr('Per-Person Limit:', r.perPersonLim + ' coins') + '\n\n' +
     FORM_LINE + '\n' +
     padStr('Date:', state.config.date || todayStr()) + '\n' +
     padStr('Signature:', state.config.playerName || '(unsigned)') + '\n';
@@ -939,17 +931,13 @@ function wireConfig() {
   bind('cfg-settlement-type', 'settlementType');
   bind('cfg-specialisation',  'specialisation');
   bind('cfg-population',      'population',           'config', function(v) { return Math.max(1, parseInt(v, 10) || 1); });
-  bind('cfg-non-matching',    'nonMatchingResidents', 'config', function(v) { return Math.max(0, parseInt(v, 10) || 0); });
+  bind('cfg-non-matching',    'taxModifierPercent', 'config', function(v) { return Math.max(0, parseFloat(v) || 0); });
   bind('cfg-player-name',     'playerName');
   bind('cfg-date',            'date');
   bind('fta-client-name',     'ftaClientName',  'ftaConfig');
-  bind('fta-per-person-limit','perPersonLimit',  'ftaConfig', function(v) { return snapLimit(parseInt(v, 10) || 150); });
+  bind('fta-per-person-limit','perPersonLimit',  'ftaConfig', function(v) { return Math.max(0, parseInt(v, 10) || 0); });
 
-  var dateEl = document.getElementById('cfg-date');
-  if (dateEl && !dateEl.value) {
-    dateEl.value = todayStr();
-    state.config.date = todayStr();
-  }
+  // date is free text — no default needed
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -964,21 +952,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (confirm('Clear all items from the cart?')) clearCart();
   });
 
-  // Loyalty toggle
-  var loyaltyToggle = document.getElementById('loyalty-toggle');
-  if (loyaltyToggle) loyaltyToggle.addEventListener('click', function() {
-    var box = document.getElementById('loyalty-info');
-    if (box) box.classList.toggle('hidden');
-  });
-
-  // Snap FTA limit on change
-  var limInput = document.getElementById('fta-per-person-limit');
-  if (limInput) limInput.addEventListener('change', function() {
-    var snapped = snapLimit(parseInt(limInput.value, 10) || 150);
-    limInput.value = snapped;
-    state.ftaConfig.perPersonLimit = snapped;
-    recalcAll();
-  });
+  // Snap FTA limit removed — free-entry number box now
 
   // Generate buttons
   var btnTax = document.getElementById('btn-generate-tax');

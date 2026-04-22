@@ -68,11 +68,11 @@
         </div>
         <div class="field-group">
           <label class="field-label" for="cfg-non-matching">
-            Taxable Non-Matching Residents
-            <span class="tooltip-anchor" title="Each adds +5% tax. First 3 goblins are exempt.">ⓘ</span>
+            Taxation Increase (%)
+            <span class="tooltip-anchor" title="Enter the total percentage increase to base tax (e.g. 10 for +10%).">ⓘ</span>
           </label>
           <input id="cfg-non-matching" type="number" class="field-input"
-                 min="0" value="0">
+                 min="0" step="0.1" value="0" placeholder="0">
         </div>
         <div class="field-group">
           <label class="field-label" for="cfg-player-name">Player / Character Name</label>
@@ -81,7 +81,8 @@
         </div>
         <div class="field-group">
           <label class="field-label" for="cfg-date">Date</label>
-          <input id="cfg-date" type="date" class="field-input">
+          <input id="cfg-date" type="text" class="field-input"
+                 placeholder="e.g. 14th of Harvest, 412 IC">
         </div>
       </div>
     </section>
@@ -109,30 +110,9 @@
                  placeholder="Seller name &amp; affiliation" autocomplete="off">
         </div>
         <div class="field-group">
-          <label class="field-label" for="fta-per-person-limit">
-            Per-Person Limit
-            <button id="loyalty-toggle" class="btn-info-toggle" type="button">ⓘ Loyalty Tiers</button>
-          </label>
+          <label class="field-label" for="fta-per-person-limit">Per-Person Limit</label>
           <input id="fta-per-person-limit" type="number" class="field-input"
-                 min="150" max="450" step="50" value="150">
-        </div>
-      </div>
-      <div id="loyalty-info" class="loyalty-info hidden">
-        <h3 class="loyalty-title">Loyalty Progression</h3>
-        <p class="loyalty-desc">Your per-person limit starts at 150 and increases by 50 with each qualifying sale, up to 450 after 6 sales.</p>
-        <table class="loyalty-table">
-          <thead><tr><th>Sales Completed</th><th>Per-Person Limit</th></tr></thead>
-          <tbody>
-            <tr><td>0</td><td>150</td></tr>
-            <tr><td>1</td><td>200</td></tr>
-            <tr><td>2</td><td>250</td></tr>
-            <tr><td>3</td><td>300</td></tr>
-            <tr><td>4</td><td>350</td></tr>
-            <tr><td>5</td><td>400</td></tr>
-            <tr><td>6+</td><td>450 (max)</td></tr>
-          </tbody>
-        </table>
-      </div>
+                 min="0" value="150" placeholder="150">
     </section>
 
     <!-- FTA weekly cap warning -->
