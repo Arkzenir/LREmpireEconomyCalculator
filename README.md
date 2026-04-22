@@ -12,22 +12,7 @@ A static, GitHub Pages-hosted web application for players of a tabletop/LARP-sty
 - Copy-to-clipboard form output in the correct Empire template format
 - Dark parchment/imperial theme — no external frameworks, pure vanilla HTML/CSS/JS
 
-## File Structure
 
-```
-/
-├── index.html        Shell: layout, all markup
-├── style.css         All visual styling (CSS variables, dark theme)
-├── js/
-│   ├── main.js       App init, tab switching, shared state
-│   ├── cache.js      Google Sheets CSV fetch + IndexedDB caching
-│   ├── search.js     Item search + autocomplete suggestions
-│   ├── cart.js       Cart add/remove/quantity, dual-price model
-│   ├── tax.js        Tax calculation logic + live display
-│   ├── fta.js        FTA calculation logic + live display
-│   └── form.js       Form text generation + clipboard copy
-└── README.md
-```
 
 ## Data Source
 
