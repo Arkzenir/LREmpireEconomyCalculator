@@ -12,23 +12,6 @@ A static, GitHub Pages-hosted web application for players of a tabletop/LARP-sty
 - Copy-to-clipboard form output in the correct Empire template format
 - Dark parchment/imperial theme — no external frameworks, pure vanilla HTML/CSS/JS
 
-## Deployment
-
-### GitHub Pages
-
-1. Fork or push this repo to GitHub.
-2. In your repository settings → **Pages** → set source to `main` branch, root folder.
-3. GitHub Pages will serve the site at `https://<username>.github.io/<repo-name>/`.
-
-No build step required. The entire project is static.
-
-### Local development
-
-```bash
-npx serve .
-# or use VS Code Live Server
-```
-
 ## File Structure
 
 ```
