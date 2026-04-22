@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Empire Economy Tracker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ═══ HEADER ══════════════════════════════════════════════════════════ -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="header-title-block">
+        <div class="header-emblem">⚜</div>
+        <div>
+          <h1 class="site-title">Empire Economy Tracker</h1>
+          <p class="site-subtitle">Tax Submission &amp; FTA Bulk Sale Assistant</p>
+        </div>
+      </div>
+      <div class="header-cache">
+        <span id="cache-status" class="cache-status cache-status--loading">Loading data…</span>
+        <button id="btn-refresh" class="btn-ghost">Refresh</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-main">
+
+    <!-- ═══ SETTLEMENT CONFIGURATION ═════════════════════════════════════ -->
+    <section class="panel config-panel" aria-label="Settlement Configuration">
+      <h2 class="panel-title">
+        <span class="panel-title-icon">🏰</span>
+        Settlement Configuration
+      </h2>
+      <div class="config-grid">
+        <div class="field-group">
+          <label class="field-label" for="cfg-settlement-name">Settlement Name</label>
+          <input id="cfg-settlement-name" type="text" class="field-input"
+                 placeholder="e.g. Ironhaven" autocomplete="off">
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="cfg-settlement-type">Settlement Type</label>
+          <select id="cfg-settlement-type" class="field-input">
+            <option value="Hamlet">Hamlet</option>
+            <option value="Village" selected>Village</option>
+            <option value="Town">Town</option>
+            <option value="City">City</option>
+            <option value="Capital">Capital</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="cfg-specialisation">Specialisation</label>
+          <select id="cfg-specialisation" class="field-input">
+            <option value="none">None (Current Price)</option>
+            <option value="priceIndustrialTown">Industrial Town</option>
+            <option value="priceIndustrialCity">Industrial City</option>
+            <option value="priceMarketTown">Market Town</option>
+            <option value="priceMarketCity">Market City</option>
+            <option value="priceReligiousTown">Religious Town</option>
+            <option value="priceTempleCity">Temple City</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="cfg-population">Active Population</label>
+          <input id="cfg-population" type="number" class="field-input"
+                 min="1" value="1">
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="cfg-non-matching">
+            Taxable Non-Matching Residents
+            <span class="tooltip-anchor" title="Each adds +5% tax. First 3 goblins are exempt.">ⓘ</span>
+          </label>
+          <input id="cfg-non-matching" type="number" class="field-input"
+                 min="0" value="0">
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="cfg-player-name">Player / Character Name</label>
+          <input id="cfg-player-name" type="text" class="field-input"
+                 placeholder="Your name" autocomplete="off">
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="cfg-date">Date</label>
+          <input id="cfg-date" type="date" class="field-input">
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ GLOBAL ALERTS ════════════════════════════════════════════════ -->
+    <div id="buying-warning" class="alert alert-danger hidden"></div>
+
+    <!-- ═══ TABS ══════════════════════════════════════════════════════════ -->
+    <div class="tabs-bar" role="tablist">
+      <button class="tab-btn active" data-tab="tax" role="tab">
+        <span class="tab-icon">📜</span> Tax Submission
+      </button>
+      <button class="tab-btn" data-tab="fta" role="tab">
+        <span class="tab-icon">🏪</span> FTA Bulk Sale
+      </button>
+    </div>
+
+    <!-- ═══ FTA-SPECIFIC INPUTS (only shown on FTA tab) ══════════════════ -->
+    <section id="fta-config-section" class="panel config-panel hidden" aria-label="FTA Configuration">
+      <h2 class="panel-title"><span class="panel-title-icon">🏪</span> FTA Details</h2>
+      <div class="config-grid">
+        <div class="field-group">
+          <label class="field-label" for="fta-client-name">FTA Client / Faction Name</label>
+          <input id="fta-client-name" type="text" class="field-input"
+                 placeholder="Seller name &amp; affiliation" autocomplete="off">
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="fta-per-person-limit">
+            Per-Person Limit
+            <button id="loyalty-toggle" class="btn-info-toggle" type="button">ⓘ Loyalty Tiers</button>
+          </label>
+          <input id="fta-per-person-limit" type="number" class="field-input"
+                 min="150" max="450" step="50" value="150">
+        </div>
+      </div>
+      <div id="loyalty-info" class="loyalty-info hidden">
+        <h3 class="loyalty-title">Loyalty Progression</h3>
+        <p class="loyalty-desc">Your per-person limit starts at 150 and increases by 50 with each qualifying sale, up to 450 after 6 sales.</p>
+        <table class="loyalty-table">
+          <thead><tr><th>Sales Completed</th><th>Per-Person Limit</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td>150</td></tr>
+            <tr><td>1</td><td>200</td></tr>
+            <tr><td>2</td><td>250</td></tr>
+            <tr><td>3</td><td>300</td></tr>
+            <tr><td>4</td><td>350</td></tr>
+            <tr><td>5</td><td>400</td></tr>
+            <tr><td>6+</td><td>450 (max)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- FTA weekly cap warning -->
+    <div id="fta-cap-warning" class="alert alert-amber hidden"></div>
+
+    <!-- ═══ ITEM SEARCH ═══════════════════════════════════════════════════ -->
+    <section class="panel search-panel" aria-label="Item Search">
+      <h2 class="panel-title"><span class="panel-title-icon">🔍</span> Add Items</h2>
+      <div class="search-wrap">
+        <input id="item-search" type="text" class="search-input"
+               placeholder="Search items by name or ID…" autocomplete="off"
+               aria-label="Search items">
+        <ul id="search-suggestions" class="suggestions-list hidden" role="listbox"></ul>
+      </div>
+    </section>
+
+    <!-- ═══ CART (shared) ════════════════════════════════════════════════ -->
+    <section class="panel cart-panel" aria-label="Cart">
+      <div class="cart-header">
+        <h2 class="panel-title"><span class="panel-title-icon">🛒</span> Cart</h2>
+        <button id="btn-clear-cart" class="btn-ghost btn-sm" type="button">Clear All</button>
+      </div>
+      <div class="table-wrap">
+        <table class="cart-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th class="col-cat">Category</th>
+              <th class="col-price">Price</th>
+              <th class="col-qty">Qty</th>
+              <th class="col-total">Total</th>
+              <th class="col-rm"></th>
+            </tr>
+          </thead>
+          <tbody id="cart-tbody">
+            <tr><td colspan="6" class="cart-empty">No items added yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="cart-footer">
+        <span class="cart-total-label" id="cart-total-label">Total Submitted Value:</span>
+        <span id="cart-total" class="cart-total-value">0.000</span>
+        <span class="cart-total-unit">coins</span>
+      </div>
+    </section>
+
+    <!-- ═══ CALCULATIONS (tab-specific content rendered here) ═══════════ -->
+    <section class="panel calc-panel" aria-label="Calculations">
+      <h2 class="panel-title" id="calc-panel-title">
+        <span class="panel-title-icon">⚖️</span> Tax Calculations
+      </h2>
+
+      <!-- Tax calc output -->
+      <div id="tax-calc-panel">
+        <p class="calc-placeholder">Configure your settlement to see calculations.</p>
+      </div>
+
+      <!-- FTA calc output -->
+      <div id="fta-calc-panel" class="hidden">
+        <p class="calc-placeholder">Add items and configure settlement to see calculations.</p>
+      </div>
+
+      <div class="form-actions">
+        <button id="btn-generate-tax" class="btn-primary" type="button" disabled>
+          📜 Generate Tax Form
+        </button>
+        <button id="btn-generate-fta" class="btn-primary hidden" type="button" disabled>
+          📋 Generate FTA Form
+        </button>
+      </div>
+    </section>
+
+    <!-- ═══ FORM OUTPUT ═══════════════════════════════════════════════════ -->
+    <section id="form-output-section" class="panel form-output-section hidden" aria-label="Form Output">
+      <h2 class="panel-title" id="form-output-title">
+        <span class="panel-title-icon">📋</span> Generated Form
+      </h2>
+      <textarea id="tax-form-output" class="form-textarea hidden" readonly spellcheck="false"></textarea>
+      <textarea id="fta-form-output" class="form-textarea hidden" readonly spellcheck="false"></textarea>
+      <div class="form-copy-row">
+        <button id="btn-copy-tax" class="btn-primary btn-copy hidden" data-target="tax-form-output" type="button">
+          📋 Copy to Clipboard
+        </button>
+        <button id="btn-copy-fta" class="btn-primary btn-copy hidden" data-target="fta-form-output" type="button">
+          📋 Copy to Clipboard
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="site-footer">
+    <p>Empire Economy Tracker — data sourced from the public Empire price sheet · Prices refresh every 4 hours</p>
+  </footer>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
