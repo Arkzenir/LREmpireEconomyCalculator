@@ -94,11 +94,13 @@ body {
   gap: 14px;
 }
 
-.header-emblem {
-  font-size: 2rem;
-  color: var(--gold);
-  text-shadow: 0 0 12px rgba(201,168,76,.4);
-  line-height: 1;
+.header-logo {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,.5);
 }
 
 .site-title {
