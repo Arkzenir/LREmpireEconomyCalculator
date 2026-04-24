@@ -544,18 +544,24 @@ function renderTaxCalc() {
       '</div>' +
 
       '<div class="calc-section">' +
-        '<h4 class="calc-heading">Buyback</h4>' +
+        '<h4 class="calc-heading">Surplus Buyback</h4>' +
         '<div class="calc-row">' +
-          '<span class="calc-label">Buyback Cap</span>' +
-          '<span class="calc-value">' + fmt(r.buybackCap) + ' coins</span>' +
-          '<span class="calc-note">Tax \u00D7 ' + capMultStr + '</span>' +
+          '<span class="calc-label">Excess Value</span>' +
+          '<span class="calc-value">' + fmt(r.excessValue) + ' coins</span>' +
+          '<span class="calc-note">Submitted \u2212 Tax Due</span>' +
         '</div>' +
         '<div class="calc-row">' +
-          '<span class="calc-label">Capped Surplus</span>' +
-          '<span class="calc-value">' + fmt(r.cappedSurplus) + ' coins</span>' +
+          '<span class="calc-label">Seasonal Cap</span>' +
+          '<span class="calc-value">' + fmt(r.buybackCap) + ' coins</span>' +
+          '<span class="calc-note">Tax Due \u00D7 ' + capMultStr + '</span>' +
+        '</div>' +
+        '<div class="calc-row">' +
+          '<span class="calc-label">Empire Purchases</span>' +
+          '<span class="calc-value">' + fmt(r.cappedSurplus) + ' coins of goods</span>' +
+          '<span class="calc-note">min(Excess, Cap)</span>' +
         '</div>' +
         '<div class="calc-row calc-row--total calc-row--payout">' +
-          '<span class="calc-label">Empire Payout</span>' +
+          '<span class="calc-label">Empire Pays You</span>' +
           '<span class="calc-value">' + fmt(r.empirePayout) + ' coins</span>' +
           '<span class="calc-note">@ ' + buyRateStr + '% buy rate</span>' +
         '</div>' +
@@ -589,7 +595,7 @@ function calcFTA() {
   var cutRate   = ftaCutRate(ftaPrice);
   var yourCut   = ftaPrice * (1 - cutRate);
   var ftaCut    = ftaPrice * cutRate;
-  var capExceeded  = baseTotal > weeklyCap;
+  var capExceeded  = yourCut > weeklyCap;
 
   return {
     population: population, perPersonLim: perPersonLim, weeklyCap: weeklyCap,
@@ -614,7 +620,7 @@ function renderFTACalc() {
   var capWarn = document.getElementById('fta-cap-warning');
   if (capWarn) {
     if (r.capExceeded) {
-      capWarn.textContent = '\u26A0 Weekly settlement cap exceeded! Your base total (' + fmt(r.baseTotal) + ' coins) exceeds the cap of ' + fmt(r.weeklyCap) + ' coins (' + r.perPersonLim + ' \u00D7 ' + r.population + ' pop).';
+      capWarn.textContent = '\u26A0 Weekly settlement cap exceeded! Your cut (' + fmt(r.yourCut) + ' coins) exceeds the cap of ' + fmt(r.weeklyCap) + ' coins (' + r.perPersonLim + ' \u00D7 ' + r.population + ' pop).';
       capWarn.classList.remove('hidden');
     } else {
       capWarn.classList.add('hidden');
@@ -638,7 +644,7 @@ function renderFTACalc() {
         '</div>' +
         '<div class="calc-row ' + (r.capExceeded ? 'calc-row--warn' : 'calc-row--good') + '">' +
           '<span class="calc-label">Cap Used</span>' +
-          '<span class="calc-value">' + fmt(r.baseTotal) + ' / ' + fmt(r.weeklyCap) + '</span>' +
+          '<span class="calc-value">' + fmt(r.yourCut) + ' / ' + fmt(r.weeklyCap) + '</span>' +
           '<span class="calc-note">' + (r.capExceeded ? '\u26A0 Exceeded' : '\u2713 Within limit') + '</span>' +
         '</div>' +
       '</div>' +
@@ -730,9 +736,9 @@ function generateTaxForm(r) {
     text += '\n' + FORM_LINE + '\n' +
       'Buyback:\n' +
       padStr('  Excess Value:', fmt(r.excessValue) + ' coins') + '\n' +
-      padStr('  Max Buyback Limit:', fmt(r.buybackCap) + ' coins') + '\n' +
-      padStr('  Capped Surplus:', fmt(r.cappedSurplus) + ' coins') + '\n' +
-      padStr('  Empire Payout:', fmt(r.empirePayout) + ' coins') + '\n';
+      padStr('  Seasonal Cap:', fmt(r.buybackCap) + ' coins  (Tax Due \xD7 ' + (BUYBACK_CAP[r.type] || 1) + ')') + '\n' +
+      padStr('  Empire Purchases:', fmt(r.cappedSurplus) + ' coins of goods') + '\n' +
+      padStr('  Empire Pays You:', fmt(r.empirePayout) + ' coins  (@ ' + (BUYBACK_RATE[r.type] * 100).toFixed(0) + '% buy rate)') + '\n';
   }
 
   text += '\n' + FORM_LINE + '\n' +
@@ -769,7 +775,7 @@ function generateFTAForm(r) {
     padStr('  Your Cut (' + pct(1 - r.cutRate) + '%):', fmt(r.yourCut) + ' coins') + '\n' +
     padStr('  FTA Cut (' + pct(r.cutRate) + '%):', fmt(r.ftaCut) + ' coins') + '\n\n' +
     FORM_LINE + '\n' +
-    padStr('Weekly Limit Used:', fmt(r.baseTotal) + ' / ' + fmt(r.weeklyCap) + (r.capExceeded ? '  \u26A0 EXCEEDED' : '')) + '\n' +
+    padStr('Weekly Limit Used:', fmt(r.yourCut) + ' / ' + fmt(r.weeklyCap) + (r.capExceeded ? '  \u26A0 EXCEEDED' : '')) + '\n' +
     padStr('Per-Person Limit:', r.perPersonLim + ' coins') + '\n\n' +
     FORM_LINE + '\n' +
     padStr('Date:', state.config.date || todayStr()) + '\n' +
