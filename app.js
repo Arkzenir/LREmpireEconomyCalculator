@@ -1065,7 +1065,7 @@ var marketState = {
 
 function getTrend(item) {
   var cur  = item.currentPrice;
-  var last = item.lastKnownPrice;
+  var last = item.lastPrice;
   if (cur === null || last === null || last === 0) return 'flat';
   var pct = (cur - last) / last;
   if (pct >  0.001) return 'up';
@@ -1075,14 +1075,14 @@ function getTrend(item) {
 
 function getTrendPct(item) {
   var cur  = item.currentPrice;
-  var last = item.lastKnownPrice;
+  var last = item.lastPrice;
   if (cur === null || last === null || last === 0) return 0;
   return ((cur - last) / last) * 100;
 }
 
 function makeSparklinesVG(item) {
   var cur  = item.currentPrice;
-  var last = item.lastKnownPrice;
+  var last = item.lastPrice;
   var trend = getTrend(item);
 
   var w = 72, h = 28;
