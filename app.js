@@ -1,5 +1,5 @@
 /*
- * Empire Economy Tracker — app.js
+ * Empire Economy Calculator — app.js
  * Single-file bundle. No ES modules, no imports. Works on GitHub Pages.
  */
 
@@ -878,6 +878,32 @@ function switchTab(tab) {
     b.classList.toggle('active', b.dataset.tab === tab);
   });
 
+  // Market browser visibility
+  var marketPanel = document.getElementById('market-browser-panel');
+  if (marketPanel) {
+    if (tab === 'market') {
+      marketPanel.classList.add('active');
+      marketPanel.style.display = 'block';
+    } else {
+      marketPanel.classList.remove('active');
+      marketPanel.style.display = 'none';
+    }
+  }
+
+  // Hide calc/cart/search panels on market tab
+  var isMarket = tab === 'market';
+  var configSection = document.getElementById('config-panel-section');
+  var itemSearchPanel = document.getElementById('item-search-panel');
+  var cartPanel = document.getElementById('cart-panel');
+  var calcPanel = document.getElementById('calc-panel');
+  var buyingWarning = document.getElementById('buying-warning');
+
+  if (configSection)  configSection.style.display  = isMarket ? 'none' : '';
+  if (itemSearchPanel) itemSearchPanel.style.display = isMarket ? 'none' : '';
+  if (cartPanel)      cartPanel.style.display       = isMarket ? 'none' : '';
+  if (calcPanel)      calcPanel.style.display        = isMarket ? 'none' : '';
+  if (buyingWarning)  buyingWarning.style.display    = isMarket ? 'none' : '';
+
   var ftaSec = document.getElementById('fta-config-section');
   if (ftaSec) ftaSec.classList.toggle('hidden', tab !== 'fta');
 
@@ -910,6 +936,8 @@ function switchTab(tab) {
   });
   var fos = document.getElementById('form-output-section');
   if (fos) fos.classList.add('hidden');
+
+  if (tab === 'market') renderMarketBrowser();
 
   renderCart();
   recalcAll();
@@ -990,6 +1018,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (result.items.length > 0) {
       initSearch(result.items, function(item) { addItem(item); });
+      initMarketBrowser(result.items);
     }
   });
 
@@ -1004,6 +1033,9 @@ document.addEventListener('DOMContentLoaded', function() {
       refreshCartPrices(r.items);
       updateCacheStatus(r.lastFetched, null);
       if (searchInput) searchInput.placeholder = 'Search ' + r.items.length + ' items by name or ID\u2026';
+      marketState.initialized = false;
+      initMarketBrowser(r.items);
+      if (state.activeTab === 'market') renderMarketBrowser();
     }).catch(function() {
       updateCacheStatus(null, 'Refresh failed');
     }).then(function() {
@@ -1016,3 +1048,295 @@ document.addEventListener('DOMContentLoaded', function() {
   renderCart();
   recalcAll();
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MARKET BROWSER
+// ═══════════════════════════════════════════════════════════════════════════
+
+var marketState = {
+  sortCol: 'name',
+  sortDir: 'asc',
+  searchQuery: '',
+  catFilter: '',
+  trendFilter: '',
+  buyingFilter: '',
+  initialized: false,
+};
+
+function getTrend(item) {
+  var cur  = item.currentPrice;
+  var last = item.lastKnownPrice;
+  if (cur === null || last === null || last === 0) return 'flat';
+  var pct = (cur - last) / last;
+  if (pct >  0.001) return 'up';
+  if (pct < -0.001) return 'down';
+  return 'flat';
+}
+
+function getTrendPct(item) {
+  var cur  = item.currentPrice;
+  var last = item.lastKnownPrice;
+  if (cur === null || last === null || last === 0) return 0;
+  return ((cur - last) / last) * 100;
+}
+
+function makeSparklinesVG(item) {
+  var cur  = item.currentPrice;
+  var last = item.lastKnownPrice;
+  var trend = getTrend(item);
+
+  var w = 72, h = 28;
+  var colMap = { up: '#4ab87a', down: '#c94040', flat: '#9a8e68' };
+  var col = colMap[trend];
+
+  if (cur === null || last === null) {
+    // flat line
+    return '<svg class="trend-sparkline" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
+      '<line x1="4" y1="' + (h/2) + '" x2="' + (w-4) + '" y2="' + (h/2) + '" stroke="' + col + '" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.4"/>' +
+      '</svg>';
+  }
+
+  // Build a mini sparkline: 5 synthetic points bridging last -> cur with slight wave
+  var pts = [];
+  for (var i = 0; i < 5; i++) {
+    var t   = i / 4;
+    var val = last + (cur - last) * t;
+    // add tiny noise for visual interest (deterministic via item id hash)
+    var noise = 0;
+    if (item.id) {
+      var code = 0;
+      for (var c = 0; c < item.id.length; c++) code += item.id.charCodeAt(c);
+      noise = Math.sin(code * (i + 1) * 2.3) * 0.03 * Math.abs(cur - last);
+    }
+    pts.push(val + noise);
+  }
+
+  var minV = Math.min.apply(null, pts);
+  var maxV = Math.max.apply(null, pts);
+  var range = maxV - minV || 1;
+
+  var pad = 4;
+  var coords = pts.map(function(v, i) {
+    var x = pad + (i / (pts.length - 1)) * (w - pad * 2);
+    var y = (h - pad) - ((v - minV) / range) * (h - pad * 2);
+    return x + ',' + y;
+  });
+
+  // Area fill path
+  var first = coords[0].split(',');
+  var last_  = coords[coords.length - 1].split(',');
+  var areaPath = 'M' + coords.join(' L') +
+    ' L' + last_[0] + ',' + (h - pad) +
+    ' L' + first[0] + ',' + (h - pad) + ' Z';
+
+  // Line path
+  var linePath = 'M' + coords.join(' L');
+
+  // Endpoint dot
+  var ep = coords[coords.length - 1].split(',');
+
+  return '<svg class="trend-sparkline" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
+    '<defs>' +
+      '<linearGradient id="sg' + (item.id||'x').replace(/[^a-z0-9]/gi,'') + '" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0%" stop-color="' + col + '" stop-opacity="0.25"/>' +
+        '<stop offset="100%" stop-color="' + col + '" stop-opacity="0.02"/>' +
+      '</linearGradient>' +
+    '</defs>' +
+    '<path d="' + areaPath + '" fill="url(#sg' + (item.id||'x').replace(/[^a-z0-9]/gi,'') + ')"/>' +
+    '<path d="' + linePath + '" fill="none" stroke="' + col + '" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>' +
+    '<circle cx="' + ep[0] + '" cy="' + ep[1] + '" r="2.5" fill="' + col + '"/>' +
+    '</svg>';
+}
+
+function initMarketBrowser(items) {
+  var catSet = {};
+  items.forEach(function(it) { if (it.category) catSet[it.category] = 1; });
+  var cats = Object.keys(catSet).sort();
+  var catSel = document.getElementById('market-cat-filter');
+  if (catSel) {
+    catSel.innerHTML = '<option value="">All Categories</option>';
+    cats.forEach(function(c) {
+      var o = document.createElement('option');
+      o.value = c; o.textContent = c;
+      catSel.appendChild(o);
+    });
+  }
+
+  // Wire search & filters
+  function wire(id, key) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input',  function() { marketState[key] = el.value; renderMarketBrowser(); });
+    el.addEventListener('change', function() { marketState[key] = el.value; renderMarketBrowser(); });
+  }
+  wire('market-search',        'searchQuery');
+  wire('market-cat-filter',    'catFilter');
+  wire('market-trend-filter',  'trendFilter');
+  wire('market-buying-filter', 'buyingFilter');
+
+  // Sortable column headers
+  var thead = document.querySelector('#market-table thead');
+  if (thead) {
+    thead.querySelectorAll('th[data-col]').forEach(function(th) {
+      th.addEventListener('click', function() {
+        var col = th.dataset.col;
+        if (marketState.sortCol === col) {
+          marketState.sortDir = marketState.sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+          marketState.sortCol = col;
+          marketState.sortDir = 'asc';
+        }
+        renderMarketBrowser();
+      });
+    });
+  }
+
+  marketState.initialized = true;
+}
+
+function renderMarketBrowser() {
+  var items = state.allItems;
+  if (!items || items.length === 0) {
+    var tbody = document.getElementById('market-tbody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="market-empty">No market data available. Try refreshing.</td></tr>';
+    return;
+  }
+
+  if (!marketState.initialized) initMarketBrowser(items);
+
+  // Filter
+  var q = marketState.searchQuery.toLowerCase().trim();
+  var filtered = items.filter(function(it) {
+    if (q) {
+      var match = (it.name && it.name.toLowerCase().indexOf(q) >= 0) ||
+                  (it.id   && it.id.toLowerCase().indexOf(q)   >= 0) ||
+                  (it.category && it.category.toLowerCase().indexOf(q) >= 0);
+      if (!match) return false;
+    }
+    if (marketState.catFilter && it.category !== marketState.catFilter) return false;
+    if (marketState.trendFilter) {
+      var t = getTrend(it);
+      if (t !== marketState.trendFilter) return false;
+    }
+    if (marketState.buyingFilter) {
+      var accepted = it.buying === true || it.buying === 'Yes' || it.buying === 'yes';
+      if (marketState.buyingFilter === 'yes' && !accepted) return false;
+      if (marketState.buyingFilter === 'no'  &&  accepted) return false;
+    }
+    return true;
+  });
+
+  // Sort
+  var col = marketState.sortCol;
+  var dir = marketState.sortDir === 'asc' ? 1 : -1;
+  filtered.sort(function(a, b) {
+    var av, bv;
+    if (col === 'trend') {
+      var tmap = { up: 2, flat: 1, down: 0 };
+      av = tmap[getTrend(a)] || 0;
+      bv = tmap[getTrend(b)] || 0;
+    } else if (col === 'currentPrice') {
+      av = a.currentPrice || 0;
+      bv = b.currentPrice || 0;
+    } else if (col === 'lastPrice') {
+      av = a.lastPrice || 0;
+      bv = b.lastPrice || 0;
+    } else if (col === 'limit') {
+      av = (a.limit && a.limit !== 'NONE' && a.limit !== '') ? parseFloat(a.limit) || 0 : -1;
+      bv = (b.limit && b.limit !== 'NONE' && b.limit !== '') ? parseFloat(b.limit) || 0 : -1;
+    } else if (col === 'buying') {
+      av = (a.buying === true || a.buying === 'Yes' || a.buying === 'yes') ? 1 : 0;
+      bv = (b.buying === true || b.buying === 'Yes' || b.buying === 'yes') ? 1 : 0;
+    } else {
+      av = (a[col] || '').toString().toLowerCase();
+      bv = (b[col] || '').toString().toLowerCase();
+    }
+    if (av < bv) return -1 * dir;
+    if (av > bv) return  1 * dir;
+    return 0;
+  });
+
+  // Stats
+  var rising = 0, falling = 0, stable = 0, priceSum = 0, priceCount = 0;
+  filtered.forEach(function(it) {
+    var t = getTrend(it);
+    if (t === 'up')   rising++;
+    if (t === 'down') falling++;
+    if (t === 'flat') stable++;
+    if (it.currentPrice !== null && it.currentPrice !== undefined) {
+      priceSum += it.currentPrice; priceCount++;
+    }
+  });
+
+  var setEl = function(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+  setEl('ms-count',   filtered.length);
+  setEl('ms-rising',  rising);
+  setEl('ms-falling', falling);
+  setEl('ms-stable',  stable);
+  setEl('ms-avg',     priceCount > 0 ? (priceSum / priceCount).toFixed(4) : '—');
+
+  // Update sort indicators
+  var thead = document.querySelector('#market-table thead');
+  if (thead) {
+    thead.querySelectorAll('th[data-col]').forEach(function(th) {
+      th.classList.remove('sort-asc', 'sort-desc');
+      if (th.dataset.col === col) th.classList.add('sort-' + marketState.sortDir);
+    });
+  }
+
+  // Render rows
+  var tbody = document.getElementById('market-tbody');
+  if (!tbody) return;
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="market-empty">No items match your search.</td></tr>';
+    var cnt = document.getElementById('market-count'); if (cnt) cnt.textContent = '';
+    return;
+  }
+
+  var html = '';
+  filtered.forEach(function(it) {
+    var trend    = getTrend(it);
+    var trendPct = getTrendPct(it);
+    var trendLabel = trend === 'up'   ? '▲ +' + Math.abs(trendPct).toFixed(1) + '%'
+                   : trend === 'down' ? '▼ −' + Math.abs(trendPct).toFixed(1) + '%'
+                   : '━ 0.0%';
+    var spark    = makeSparklinesVG(it);
+    var cur      = it.currentPrice !== null && it.currentPrice !== undefined
+                   ? it.currentPrice.toFixed(4) : '—';
+    var lastP    = it.lastPrice !== null && it.lastPrice !== undefined
+                   ? it.lastPrice.toFixed(4) : '—';
+    var limitStr = (it.limit && it.limit !== 'NONE' && it.limit !== '') ? it.limit : '—';
+    var accepted = it.buying === true || it.buying === 'Yes' || it.buying === 'yes';
+    var buyingHtml = accepted
+      ? '<span class="buying-dot" title="Accepted"></span>'
+      : '<span class="not-buying-dash" title="Not Accepted">✕</span>';
+
+    html += '<tr>' +
+      '<td class="mt-id">'  + (it.id || '—') + '</td>' +
+      '<td class="mt-name">' + escHtml(it.name || '—') + '</td>' +
+      '<td class="mt-cat"><span class="mt-cat-badge">' + escHtml(it.category || '—') + '</span></td>' +
+      '<td class="mt-price">' + cur + '</td>' +
+      '<td class="mt-last-price">' + lastP + '</td>' +
+      '<td class="mt-trend-cell">' +
+        '<div class="trend-container">' +
+          spark +
+          '<span class="trend-badge ' + trend + '">' + trendLabel + '</span>' +
+        '</div>' +
+      '</td>' +
+      '<td class="mt-limit">' + limitStr + '</td>' +
+      '<td class="mt-buying">' + buyingHtml + '</td>' +
+      '</tr>';
+  });
+
+  tbody.innerHTML = html;
+
+  var cnt = document.getElementById('market-count');
+  if (cnt) cnt.textContent = 'Showing ' + filtered.length + ' of ' + items.length + ' items';
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+

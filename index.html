@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Empire Economy Tracker</title>
+  <title>Empire Economy Calculator</title>
   <link rel="icon" type="image/png" href="LRLogo.png">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -15,7 +15,7 @@
       <div class="header-title-block">
         <img src="LRLogo.png" alt="LR Logo" class="header-logo">
         <div>
-          <h1 class="site-title">Empire Economy Tracker</h1>
+          <h1 class="site-title">Empire Economy Calculator</h1>
           <p class="site-subtitle">Tax Submission &amp; FTA Bulk Sale Assistant</p>
         </div>
       </div>
@@ -29,7 +29,7 @@
   <main class="app-main">
 
     <!-- ═══ SETTLEMENT CONFIGURATION ═════════════════════════════════════ -->
-    <section class="panel config-panel" aria-label="Settlement Configuration">
+    <section class="panel config-panel" aria-label="Settlement Configuration" id="config-panel-section">
       <h2 class="panel-title">
         <span class="panel-title-icon">🏰</span>
         Settlement Configuration
@@ -99,6 +99,9 @@
       <button class="tab-btn" data-tab="fta" role="tab">
         <span class="tab-icon">🏪</span> FTA Bulk Sale
       </button>
+      <button class="tab-btn" data-tab="market" role="tab">
+        <span class="tab-icon">⚜</span> Market Browser
+      </button>
     </div>
 
     <!-- ═══ FTA-SPECIFIC INPUTS (only shown on FTA tab) ══════════════════ -->
@@ -119,8 +122,8 @@
     <!-- FTA weekly cap warning -->
     <div id="fta-cap-warning" class="alert alert-amber hidden"></div>
 
-    <!-- ═══ ITEM SEARCH ═══════════════════════════════════════════════════ -->
-    <section class="panel search-panel" aria-label="Item Search">
+    <!-- ═══ ITEM SEARCH (hidden on market tab) ══════════════════════════ -->
+    <section class="panel search-panel" aria-label="Item Search" id="item-search-panel">
       <h2 class="panel-title"><span class="panel-title-icon">🔍</span> Add Items</h2>
       <div class="search-wrap">
         <input id="item-search" type="text" class="search-input"
@@ -130,8 +133,8 @@
       </div>
     </section>
 
-    <!-- ═══ CART (shared) ════════════════════════════════════════════════ -->
-    <section class="panel cart-panel" aria-label="Cart">
+    <!-- ═══ CART (shared, hidden on market tab) ══════════════════════════ -->
+    <section class="panel cart-panel" aria-label="Cart" id="cart-panel">
       <div class="cart-header">
         <h2 class="panel-title"><span class="panel-title-icon">🛒</span> Cart</h2>
         <button id="btn-clear-cart" class="btn-ghost btn-sm" type="button">Clear All</button>
@@ -160,22 +163,17 @@
       </div>
     </section>
 
-    <!-- ═══ CALCULATIONS (tab-specific content rendered here) ═══════════ -->
-    <section class="panel calc-panel" aria-label="Calculations">
+    <!-- ═══ CALCULATIONS (hidden on market tab) ═══════════════════════════ -->
+    <section class="panel calc-panel" aria-label="Calculations" id="calc-panel">
       <h2 class="panel-title" id="calc-panel-title">
         <span class="panel-title-icon">⚖️</span> Tax Calculations
       </h2>
-
-      <!-- Tax calc output -->
       <div id="tax-calc-panel">
         <p class="calc-placeholder">Configure your settlement to see calculations.</p>
       </div>
-
-      <!-- FTA calc output -->
       <div id="fta-calc-panel" class="hidden">
         <p class="calc-placeholder">Add items and configure settlement to see calculations.</p>
       </div>
-
       <div class="form-actions">
         <button id="btn-generate-tax" class="btn-primary" type="button" disabled>
           📜 Generate Tax Form
@@ -203,10 +201,91 @@
       </div>
     </section>
 
+    <!-- ═══ MARKET BROWSER ═══════════════════════════════════════════════ -->
+    <section class="panel" id="market-browser-panel" aria-label="Market Browser">
+      <h2 class="panel-title">
+        <span class="panel-title-icon">⚜</span> Market Browser
+      </h2>
+
+      <div class="market-toolbar">
+        <div class="market-search-wrap">
+          <input id="market-search" type="text" class="market-search"
+                 placeholder="Search by name, ID or category…" autocomplete="off">
+        </div>
+        <div class="market-filter-group">
+          <span class="market-filter-label">Category</span>
+          <select id="market-cat-filter" class="market-filter-select">
+            <option value="">All Categories</option>
+          </select>
+        </div>
+        <div class="market-filter-group">
+          <span class="market-filter-label">Trend</span>
+          <select id="market-trend-filter" class="market-filter-select">
+            <option value="">All Trends</option>
+            <option value="up">Rising ▲</option>
+            <option value="down">Falling ▼</option>
+            <option value="flat">Stable ━</option>
+          </select>
+        </div>
+        <div class="market-filter-group">
+          <span class="market-filter-label">Buying</span>
+          <select id="market-buying-filter" class="market-filter-select">
+            <option value="">All Items</option>
+            <option value="yes">Accepted Only</option>
+            <option value="no">Not Accepted</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="market-stats-bar" id="market-stats-bar">
+        <div class="market-stat">
+          <span class="market-stat-label">Items Shown</span>
+          <span class="market-stat-value" id="ms-count">—</span>
+        </div>
+        <div class="market-stat">
+          <span class="market-stat-label">Rising</span>
+          <span class="market-stat-value trend-up" id="ms-rising">—</span>
+        </div>
+        <div class="market-stat">
+          <span class="market-stat-label">Falling</span>
+          <span class="market-stat-value trend-down" id="ms-falling">—</span>
+        </div>
+        <div class="market-stat">
+          <span class="market-stat-label">Stable</span>
+          <span class="market-stat-value" id="ms-stable">—</span>
+        </div>
+        <div class="market-stat">
+          <span class="market-stat-label">Avg. Price</span>
+          <span class="market-stat-value" id="ms-avg">—</span>
+        </div>
+      </div>
+
+      <div class="market-table-wrap">
+        <table class="market-table" id="market-table">
+          <thead>
+            <tr>
+              <th data-col="id">ID <span class="sort-icon">⇅</span></th>
+              <th data-col="name">Item Name <span class="sort-icon">⇅</span></th>
+              <th data-col="category">Category <span class="sort-icon">⇅</span></th>
+              <th data-col="currentPrice">Current Price <span class="sort-icon">⇅</span></th>
+              <th data-col="lastPrice">Last Price <span class="sort-icon">⇅</span></th>
+              <th data-col="trend">Trend <span class="sort-icon">⇅</span></th>
+              <th data-col="limit">Limit <span class="sort-icon">⇅</span></th>
+              <th data-col="buying">Accepted <span class="sort-icon">⇅</span></th>
+            </tr>
+          </thead>
+          <tbody id="market-tbody">
+            <tr><td colspan="8" class="market-empty">Loading market data…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="market-count" id="market-count"></div>
+    </section>
+
   </main>
 
   <footer class="site-footer">
-    <p>Empire Economy Tracker — data sourced from the public Empire price sheet · Prices refresh every 4 hours</p>
+    <p>Empire Economy Calculator — data sourced from the public Empire price sheet · Prices refresh every 4 hours</p>
   </footer>
 
   <script src="app.js"></script>
