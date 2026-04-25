@@ -852,19 +852,79 @@ function recalcAll() {
   else renderFTACalc();
 }
 
-function updateCacheStatus(lastFetched, warning) {
+var _cacheLastFetched = null;
+var _cacheWarning     = null;
+var _cacheTicker      = null;
+
+function formatAgo(lastFetched) {
+  var totalSecs = Math.floor((Date.now() - lastFetched) / 1000);
+  if (totalSecs < 60)  return 'just now';
+  var mins = Math.floor(totalSecs / 60);
+  var hrs  = Math.floor(mins / 60);
+  if (hrs > 0) {
+    var remMins = mins % 60;
+    return hrs + 'h ' + (remMins > 0 ? remMins + 'm' : '') + ' ago';
+  }
+  return mins + ' minute' + (mins === 1 ? '' : 's') + ' ago';
+}
+
+// Returns a hex colour interpolated from green → amber → red as age grows (0–240 mins)
+function freshnessColour(lastFetched) {
+  var maxAge = 240; // minutes before fully red
+  var mins   = (Date.now() - lastFetched) / 60000;
+  var t      = Math.min(1, Math.max(0, mins / maxAge));
+
+  // green  #4ab87a  rgb(74,184,122)
+  // amber  #d4a843  rgb(212,168,67)
+  // red    #c94040  rgb(201,64,64)
+  var r, g, b;
+  if (t < 0.5) {
+    var s = t / 0.5;
+    r = Math.round(74  + (212 - 74)  * s);
+    g = Math.round(184 + (168 - 184) * s);
+    b = Math.round(122 + (67  - 122) * s);
+  } else {
+    var s = (t - 0.5) / 0.5;
+    r = Math.round(212 + (201 - 212) * s);
+    g = Math.round(168 + (64  - 168) * s);
+    b = Math.round(67  + (64  - 67)  * s);
+  }
+  return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
+function _paintCacheStatus() {
   var el = document.getElementById('cache-status');
   if (!el) return;
-  if (!lastFetched) {
+  if (!_cacheLastFetched) {
     el.textContent = 'Data unavailable';
     el.className   = 'cache-status cache-status--error';
+    el.removeAttribute('style');
     return;
   }
-  var mins = Math.floor((Date.now() - lastFetched) / 60000);
-  var hrs  = Math.floor(mins / 60);
-  var ago  = hrs > 0 ? (hrs + 'h ' + (mins % 60) + 'm ago') : (mins > 0 ? (mins + 'm ago') : 'just now');
-  el.textContent = warning ? ('\u26A0 ' + warning + ' (last: ' + ago + ')') : ('Updated ' + ago);
-  el.className   = 'cache-status ' + (warning ? 'cache-status--warn' : 'cache-status--ok');
+  var ago   = formatAgo(_cacheLastFetched);
+  var col   = freshnessColour(_cacheLastFetched);
+  if (_cacheWarning) {
+    el.textContent = '\u26A0 ' + _cacheWarning + ' \u2014 Last updated ' + ago;
+  } else {
+    el.textContent = 'Last updated ' + ago;
+  }
+  el.className = 'cache-status cache-status--dynamic';
+  el.style.color        = col;
+  el.style.borderColor  = col.replace('rgb(', 'rgba(').replace(')', ', 0.35)');
+  el.style.background   = col.replace('rgb(', 'rgba(').replace(')', ', 0.07)');
+}
+
+function updateCacheStatus(lastFetched, warning) {
+  _cacheLastFetched = lastFetched || null;
+  _cacheWarning     = warning     || null;
+
+  _paintCacheStatus();
+
+  // Start a live ticker so the label updates every 30s automatically
+  if (_cacheTicker) clearInterval(_cacheTicker);
+  if (_cacheLastFetched) {
+    _cacheTicker = setInterval(_paintCacheStatus, 30000);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

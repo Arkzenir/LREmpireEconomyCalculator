@@ -1007,3 +1007,67 @@ body {
   .market-filter-group { justify-content: flex-start; }
   .mt-id, .mt-last-price { display: none; }
 }
+
+/* ─── Header cache — prominent freshed-up display ────────────────────────── */
+.header-cache {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  background: rgba(0,0,0,.4);
+  border: 1px solid var(--border-gold);
+  border-radius: var(--radius-lg);
+  padding: 7px 8px 7px 14px;
+}
+
+.cache-status {
+  font-size: .82rem;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  background: none !important;
+  letter-spacing: .02em;
+  transition: color .6s ease;
+}
+
+.cache-status--dynamic {
+  font-family: var(--font-display);
+  font-size: .75rem;
+  letter-spacing: .04em;
+  transition: color .6s ease;
+}
+
+.cache-status--loading { color: var(--text-muted); }
+.cache-status--error   { color: var(--red); }
+
+/* Refresh button — prominent gold variant inside the cache block */
+#btn-refresh {
+  background: linear-gradient(180deg, #1f1700 0%, #110e00 100%);
+  border: 1px solid var(--gold-dim);
+  border-radius: var(--radius);
+  color: var(--gold);
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .08em;
+  padding: 6px 14px;
+  text-transform: uppercase;
+  transition: background var(--transition), border-color var(--transition),
+              color var(--transition), box-shadow var(--transition), transform 80ms;
+  white-space: nowrap;
+}
+
+#btn-refresh:hover:not(:disabled) {
+  background: linear-gradient(180deg, #2e2200 0%, #1c1500 100%);
+  border-color: var(--gold);
+  color: var(--gold-bright);
+  box-shadow: 0 0 12px rgba(212,168,67,.25);
+}
+
+#btn-refresh:active:not(:disabled) { transform: translateY(1px); }
+
+#btn-refresh:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
