@@ -1,4 +1,4 @@
-# Empire Economy Tracker
+# Empire Economy Web App
 
 A static, GitHub Pages-hosted web application for use in the Lost Realms VS Roleplay Server to fill out **tax submission forms** and **FTA bulk sale forms**.
 
