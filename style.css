@@ -1075,29 +1075,39 @@ body {
 
 /* ─── Ko-fi icon (header) ───────────────────────────────────────────────── */
 .kofi-header-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 30px;
+  gap: 5px;
+  padding: 0 10px;
   height: 30px;
   border-radius: var(--radius);
-  border: 1px solid var(--gold-dim);
-  background: transparent;
-  color: var(--gold-dim);
+  border: 1px solid var(--gold);
+  background: rgba(212,168,67,.15);
+  color: var(--gold);
   text-decoration: none;
   flex-shrink: 0;
-  transition: color var(--transition), border-color var(--transition), box-shadow var(--transition);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: color var(--transition), border-color var(--transition), background var(--transition), box-shadow var(--transition);
 }
 
 .kofi-header-btn:hover {
-  color: var(--gold-bright);
-  border-color: var(--gold);
-  box-shadow: 0 0 10px rgba(212,168,67,.2);
+  color: #1a1508;
+  background: var(--gold);
+  border-color: var(--gold-bright);
+  box-shadow: 0 0 14px rgba(212,168,67,.35);
 }
 
 .kofi-header-btn svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   fill: currentColor;
   display: block;
+  flex-shrink: 0;
+}
+
+.kofi-header-btn__text {
+  line-height: 1;
 }
