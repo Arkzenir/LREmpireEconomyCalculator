@@ -1071,3 +1071,41 @@ body {
   opacity: .4;
   cursor: not-allowed;
 }
+
+/* ─── Ko-fi ──────────────────────────────────────────────────────────────── */
+.footer-kofi {
+  margin-top: 10px;
+}
+
+.kofi-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: linear-gradient(180deg, #1a1300 0%, #0f0c00 100%);
+  border: 1px solid var(--gold-dim);
+  border-radius: var(--radius);
+  color: var(--gold);
+  font-family: var(--font-display);
+  font-size: .75rem;
+  font-weight: 600;
+  letter-spacing: .08em;
+  padding: 7px 16px;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: background var(--transition), border-color var(--transition),
+              color var(--transition), box-shadow var(--transition);
+}
+
+.kofi-link:hover {
+  background: linear-gradient(180deg, #2a1f00 0%, #1a1400 100%);
+  border-color: var(--gold);
+  color: var(--gold-bright);
+  box-shadow: 0 0 14px rgba(212,168,67,.2);
+}
+
+.kofi-icon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  flex-shrink: 0;
+}
