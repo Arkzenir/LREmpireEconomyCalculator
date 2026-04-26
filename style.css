@@ -147,11 +147,11 @@ body {
 }
 
 .kofi-subtext {
-  font-size: 0.65rem;
-  color: var(--text-muted);
+  font-size: 0.72rem;
+  color: #f0c84a;
   letter-spacing: 0.02em;
   margin: 0;
-  opacity: 0.75;
+  font-weight: 500;
 }
 
 /* ─── Main layout ────────────────────────────────────────────────────────── */
@@ -1099,16 +1099,16 @@ body {
 .kofi-header-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 0 10px;
-  height: 30px;
+  gap: 6px;
+  padding: 0 13px;
+  height: 34px;
   border-radius: var(--radius);
   border: 1px solid var(--gold);
   background: rgba(212,168,67,.15);
   color: var(--gold);
   text-decoration: none;
   flex-shrink: 0;
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1123,8 +1123,8 @@ body {
 }
 
 .kofi-header-btn svg {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   fill: currentColor;
   display: block;
   flex-shrink: 0;
