@@ -1,6 +1,9 @@
 /*
  * Empire Economy Calculator — app.js
  * Single-file bundle. No ES modules, no imports. Works on GitHub Pages.
+ *
+ * All editable constants (tax rates, buyback values, URLs, etc.) live in
+ * config.js — edit that file rather than hunting through this one.
  */
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -10,6 +13,7 @@
 var state = {
   activeTab: 'tax',
   allItems:  [],
+  allImports: [],
   config: {
     settlementName:       '',
     settlementType:       'Village',
@@ -27,15 +31,8 @@ var state = {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CACHE / INDEXEDDB
+// (URL constants and DB/cache key constants are defined in config.js)
 // ═══════════════════════════════════════════════════════════════════════════
-
-var SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1oA5z1HACI7vBHWi66Om5IIQ803qqjVlr4yOXJy-pg9M/export?format=csv&gid=0';
-var DB_NAME    = 'EmpireEconomyDB';
-var DB_VERSION = 1;
-var STORE_NAME = 'cache';
-var CACHE_KEY  = 'itemData';
-var CACHE_TS   = 'lastFetched';
-var MAX_AGE_MS = 4 * 60 * 60 * 1000;
 
 var _db = null;
 
@@ -68,6 +65,10 @@ function dbSet(key, value) {
     });
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CSV PARSING
+// ═══════════════════════════════════════════════════════════════════════════
 
 function parseCSV(text) {
   var rows = [], row = [], cur = '', inQ = false;
@@ -102,6 +103,27 @@ function limVal(v) {
   var n = parseInt(v, 10);
   return isNaN(n) ? null : n;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function recalcAll() {
+  if (state.activeTab === 'tax') renderTaxCalc();
+  else if (state.activeTab === 'fta') renderFTACalc();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN PRICE SHEET — parse & load
+// ═══════════════════════════════════════════════════════════════════════════
 
 function rowToItem(row) {
   return {
@@ -178,6 +200,89 @@ function forceRefresh() {
     var now   = Date.now();
     return dbSet(CACHE_KEY, items).then(function() {
       return dbSet(CACHE_TS, now);
+    }).catch(function() {}).then(function() {
+      return { items: items, fromCache: false, lastFetched: now, warning: null };
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// IMPORTS SHEET — parse & load
+// Columns: [0] Item ID, [1] Item Name, [2] Trader Category, [3] Qty. Unit,
+//          [4] Current Price, [5] BUYING/SELLING (intentionally ignored),
+//          [6] FTA Buying?
+// Only rows where FTA Buying? is "Yes" are stored and displayed.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function rowToImport(row) {
+  return {
+    id:       (row[0] || '').trim(),
+    name:     (row[1] || '').trim(),
+    category: (row[2] || '').trim(),
+    unit:     (row[3] || '').trim(),
+    price:    numVal(row[4]),
+    // col[5] is BUYING/SELLING — intentionally skipped per spec
+    ftaBuying: (row[6] || '').trim().toLowerCase() === 'yes',
+  };
+}
+
+function parseImports(csvText) {
+  var rows = parseCSV(csvText);
+  if (rows.length < 2) return [];
+  return rows.slice(1)
+    .filter(function(r) { return r[1] && r[1].trim() !== ''; })
+    .map(rowToImport)
+    .filter(function(item) { return item.ftaBuying; });
+}
+
+function fetchImportsFromSheet() {
+  return fetch(IMPORTS_CSV_URL).then(function(resp) {
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    return resp.text();
+  });
+}
+
+function loadImports() {
+  var cachedData = null, cachedTs = null;
+  return dbGet(IMPORTS_CACHE_KEY).then(function(v) {
+    cachedData = v;
+    return dbGet(IMPORTS_CACHE_TS);
+  }).catch(function() {
+    return null;
+  }).then(function(ts) {
+    cachedTs = ts;
+    var now   = Date.now();
+    var stale = !cachedTs || (now - cachedTs) > MAX_AGE_MS;
+
+    if (!stale && cachedData) {
+      return { items: cachedData, fromCache: true, lastFetched: cachedTs, warning: null };
+    }
+
+    return fetchImportsFromSheet().then(function(csv) {
+      var items = parseImports(csv);
+      var now2  = Date.now();
+      return dbSet(IMPORTS_CACHE_KEY, items).then(function() {
+        return dbSet(IMPORTS_CACHE_TS, now2);
+      }).catch(function() {}).then(function() {
+        return { items: items, fromCache: false, lastFetched: now2, warning: null };
+      });
+    }).catch(function() {
+      if (cachedData) {
+        return { items: cachedData, fromCache: true, lastFetched: cachedTs,
+                 warning: 'Could not refresh imports — using cached version.' };
+      }
+      return { items: [], fromCache: false, lastFetched: null,
+               warning: 'OFFLINE: Could not load imports data.' };
+    });
+  });
+}
+
+function forceRefreshImports() {
+  return fetchImportsFromSheet().then(function(csv) {
+    var items = parseImports(csv);
+    var now   = Date.now();
+    return dbSet(IMPORTS_CACHE_KEY, items).then(function() {
+      return dbSet(IMPORTS_CACHE_TS, now);
     }).catch(function() {}).then(function() {
       return { items: items, fromCache: false, lastFetched: now, warning: null };
     });
@@ -447,11 +552,8 @@ function renderCart() {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TAX
+// (TAX_RATE, BUYBACK_CAP, BUYBACK_RATE are defined in config.js)
 // ═══════════════════════════════════════════════════════════════════════════
-
-var TAX_RATE = { Hamlet: 0, Village: 100, Town: 125, City: 150, Capital: 150 };
-var BUYBACK_CAP = { Village: 2.0, Town: 1.5, City: 1.0, Capital: 1.0 };
-var BUYBACK_RATE = { Village: 0.75, Town: 0.65, City: 0.55, Capital: 0.55 };
 
 function calcTax() {
   var type       = state.config.settlementType;
@@ -526,7 +628,6 @@ function renderTaxCalc() {
           '<span class="calc-value">' + fmt(r.finalTax) + ' coins</span>' +
         '</div>' +
       '</div>' +
-
       '<div class="calc-section">' +
         '<h4 class="calc-heading">Submitted Goods</h4>' +
         '<div class="calc-row">' +
@@ -542,7 +643,6 @@ function renderTaxCalc() {
           '</span>' +
         '</div>' +
       '</div>' +
-
       '<div class="calc-section">' +
         '<h4 class="calc-heading">Surplus Buyback</h4>' +
         '<div class="calc-row">' +
@@ -571,17 +671,15 @@ function renderTaxCalc() {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FTA
+// (FTA_MARKUP, FTA_CUT_BRACKETS are defined in config.js)
 // ═══════════════════════════════════════════════════════════════════════════
 
-var FTA_MARKUP = 1.25;
-
 function ftaCutRate(ftaPrice) {
-  if (ftaPrice <= 3000) return 0.10;
-  if (ftaPrice <= 4000) return 0.25;
-  return 0.40;
+  for (var i = 0; i < FTA_CUT_BRACKETS.length; i++) {
+    if (ftaPrice <= FTA_CUT_BRACKETS[i].upTo) return FTA_CUT_BRACKETS[i].rate;
+  }
+  return FTA_CUT_BRACKETS[FTA_CUT_BRACKETS.length - 1].rate;
 }
-
-
 
 function calcFTA() {
   var population   = Math.max(1, parseInt(state.config.population, 10) || 1);
@@ -591,11 +689,11 @@ function calcFTA() {
   var accepted  = cart.filter(function(i) { return i.buying && i.quantity > 0; });
   var baseTotal = accepted.reduce(function(s, i) { return s + i.quantity * i.currentPrice; }, 0);
 
-  var ftaPrice  = baseTotal * FTA_MARKUP;
-  var cutRate   = ftaCutRate(ftaPrice);
-  var yourCut   = ftaPrice * (1 - cutRate);
-  var ftaCut    = ftaPrice * cutRate;
-  var capExceeded  = yourCut > weeklyCap;
+  var ftaPrice    = baseTotal * FTA_MARKUP;
+  var cutRate     = ftaCutRate(ftaPrice);
+  var yourCut     = ftaPrice * (1 - cutRate);
+  var ftaCut      = ftaPrice * cutRate;
+  var capExceeded = yourCut > weeklyCap;
 
   return {
     population: population, perPersonLim: perPersonLim, weeklyCap: weeklyCap,
@@ -627,7 +725,12 @@ function renderFTACalc() {
     }
   }
 
-  var bracketLabel = r.ftaPrice <= 3000 ? '\u2264 3000' : (r.ftaPrice <= 4000 ? '3001\u20134000' : '4001+');
+  var b0 = FTA_CUT_BRACKETS[0], b1 = FTA_CUT_BRACKETS[1];
+  var bracketLabel = r.ftaPrice <= b0.upTo
+    ? '\u2264 ' + b0.upTo
+    : (r.ftaPrice <= b1.upTo
+        ? (b0.upTo + 1) + '\u2013' + b1.upTo
+        : (b1.upTo + 1) + '+');
 
   panel.innerHTML =
     '<div class="calc-grid">' +
@@ -648,7 +751,6 @@ function renderFTACalc() {
           '<span class="calc-note">' + (r.capExceeded ? '\u26A0 Exceeded' : '\u2713 Within limit') + '</span>' +
         '</div>' +
       '</div>' +
-
       '<div class="calc-section">' +
         '<h4 class="calc-heading">FTA Price</h4>' +
         '<div class="calc-row">' +
@@ -656,7 +758,7 @@ function renderFTACalc() {
           '<span class="calc-value">' + fmt(r.baseTotal) + ' coins</span>' +
         '</div>' +
         '<div class="calc-row calc-row--total">' +
-          '<span class="calc-label">FTA Price (\u00D71.25)</span>' +
+          '<span class="calc-label">FTA Price (\u00D7' + FTA_MARKUP + ')</span>' +
           '<span class="calc-value">' + fmt(r.ftaPrice) + ' coins</span>' +
         '</div>' +
         '<div class="calc-row">' +
@@ -665,7 +767,6 @@ function renderFTACalc() {
           '<span class="calc-note">' + bracketLabel + '</span>' +
         '</div>' +
       '</div>' +
-
       '<div class="calc-section">' +
         '<h4 class="calc-heading">Your Earnings</h4>' +
         '<div class="calc-row calc-row--total calc-row--payout">' +
@@ -770,7 +871,7 @@ function generateFTAForm(r) {
     'Declared Value (Base Empire Price):\n' + valueLines + '\n\n' +
     FORM_LINE + '\n' +
     padStr('Total Base Price:', fmt(r.baseTotal) + ' coins') + '\n' +
-    padStr('Total \u00D71.25 (FTA Price):', fmt(r.ftaPrice) + ' coins') + '\n\n' +
+    padStr('Total \u00D7' + FTA_MARKUP + ' (FTA Price):', fmt(r.ftaPrice) + ' coins') + '\n\n' +
     padStr('Cut Rate Bracket:', pct(r.cutRate) + '%') + '\n' +
     padStr('  Your Cut (' + pct(1 - r.cutRate) + '%):', fmt(r.yourCut) + ' coins') + '\n' +
     padStr('  FTA Cut (' + pct(r.cutRate) + '%):', fmt(r.ftaCut) + ' coins') + '\n\n' +
@@ -836,21 +937,8 @@ function initCopyButtons() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// HELPERS
+// CACHE STATUS DISPLAY
 // ═══════════════════════════════════════════════════════════════════════════
-
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function recalcAll() {
-  if (state.activeTab === 'tax') renderTaxCalc();
-  else renderFTACalc();
-}
 
 var _cacheLastFetched = null;
 var _cacheWarning     = null;
@@ -868,23 +956,18 @@ function formatAgo(lastFetched) {
   return mins + ' minute' + (mins === 1 ? '' : 's') + ' ago';
 }
 
-// Returns a hex colour interpolated from green → amber → red as age grows (0–240 mins)
 function freshnessColour(lastFetched) {
-  var maxAge = 240; // minutes before fully red
+  var maxAge = 240;
   var mins   = (Date.now() - lastFetched) / 60000;
   var t      = Math.min(1, Math.max(0, mins / maxAge));
-
-  // green  #4ab87a  rgb(74,184,122)
-  // amber  #d4a843  rgb(212,168,67)
-  // red    #c94040  rgb(201,64,64)
-  var r, g, b;
+  var r, g, b, s;
   if (t < 0.5) {
-    var s = t / 0.5;
+    s = t / 0.5;
     r = Math.round(74  + (212 - 74)  * s);
     g = Math.round(184 + (168 - 184) * s);
     b = Math.round(122 + (67  - 122) * s);
   } else {
-    var s = (t - 0.5) / 0.5;
+    s = (t - 0.5) / 0.5;
     r = Math.round(212 + (201 - 212) * s);
     g = Math.round(168 + (64  - 168) * s);
     b = Math.round(67  + (64  - 67)  * s);
@@ -901,30 +984,23 @@ function _paintCacheStatus() {
     el.removeAttribute('style');
     return;
   }
-  var ago   = formatAgo(_cacheLastFetched);
-  var col   = freshnessColour(_cacheLastFetched);
-  if (_cacheWarning) {
-    el.textContent = '\u26A0 ' + _cacheWarning + ' \u2014 Last updated ' + ago;
-  } else {
-    el.textContent = 'Last updated ' + ago;
-  }
+  var ago = formatAgo(_cacheLastFetched);
+  var col = freshnessColour(_cacheLastFetched);
+  el.textContent = _cacheWarning
+    ? '\u26A0 ' + _cacheWarning + ' \u2014 Last updated ' + ago
+    : 'Last updated ' + ago;
   el.className = 'cache-status cache-status--dynamic';
-  el.style.color        = col;
-  el.style.borderColor  = col.replace('rgb(', 'rgba(').replace(')', ', 0.35)');
-  el.style.background   = col.replace('rgb(', 'rgba(').replace(')', ', 0.07)');
+  el.style.color       = col;
+  el.style.borderColor = col.replace('rgb(', 'rgba(').replace(')', ', 0.35)');
+  el.style.background  = col.replace('rgb(', 'rgba(').replace(')', ', 0.07)');
 }
 
 function updateCacheStatus(lastFetched, warning) {
   _cacheLastFetched = lastFetched || null;
   _cacheWarning     = warning     || null;
-
   _paintCacheStatus();
-
-  // Start a live ticker so the label updates every 30s automatically
   if (_cacheTicker) clearInterval(_cacheTicker);
-  if (_cacheLastFetched) {
-    _cacheTicker = setInterval(_paintCacheStatus, 30000);
-  }
+  if (_cacheLastFetched) _cacheTicker = setInterval(_paintCacheStatus, 30000);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -938,31 +1014,35 @@ function switchTab(tab) {
     b.classList.toggle('active', b.dataset.tab === tab);
   });
 
-  // Market browser visibility
+  var isMarket  = tab === 'market';
+  var isImports = tab === 'imports';
+  var isCalcTab = !isMarket && !isImports;
+
+  // Market browser panel
   var marketPanel = document.getElementById('market-browser-panel');
   if (marketPanel) {
-    if (tab === 'market') {
-      marketPanel.classList.add('active');
-      marketPanel.style.display = 'block';
-    } else {
-      marketPanel.classList.remove('active');
-      marketPanel.style.display = 'none';
-    }
+    marketPanel.classList.toggle('active', isMarket);
+    marketPanel.style.display = isMarket ? 'block' : 'none';
   }
 
-  // Hide calc/cart/search panels on market tab
-  var isMarket = tab === 'market';
-  var configSection = document.getElementById('config-panel-section');
-  var itemSearchPanel = document.getElementById('item-search-panel');
-  var cartPanel = document.getElementById('cart-panel');
-  var calcPanel = document.getElementById('calc-panel');
-  var buyingWarning = document.getElementById('buying-warning');
+  // Empire Imports panel
+  var importsPanel = document.getElementById('imports-browser-panel');
+  if (importsPanel) {
+    importsPanel.style.display = isImports ? 'block' : 'none';
+  }
 
-  if (configSection)  configSection.style.display  = isMarket ? 'none' : '';
-  if (itemSearchPanel) itemSearchPanel.style.display = isMarket ? 'none' : '';
-  if (cartPanel)      cartPanel.style.display       = isMarket ? 'none' : '';
-  if (calcPanel)      calcPanel.style.display        = isMarket ? 'none' : '';
-  if (buyingWarning)  buyingWarning.style.display    = isMarket ? 'none' : '';
+  // Panels only visible on calc tabs (tax / fta)
+  var configSection   = document.getElementById('config-panel-section');
+  var itemSearchPanel = document.getElementById('item-search-panel');
+  var cartPanel       = document.getElementById('cart-panel');
+  var calcPanel       = document.getElementById('calc-panel');
+  var buyingWarning   = document.getElementById('buying-warning');
+
+  if (configSection)   configSection.style.display   = isCalcTab ? '' : 'none';
+  if (itemSearchPanel) itemSearchPanel.style.display  = isCalcTab ? '' : 'none';
+  if (cartPanel)       cartPanel.style.display        = isCalcTab ? '' : 'none';
+  if (calcPanel)       calcPanel.style.display        = isCalcTab ? '' : 'none';
+  if (buyingWarning)   buyingWarning.style.display    = isCalcTab ? '' : 'none';
 
   var ftaSec = document.getElementById('fta-config-section');
   if (ftaSec) ftaSec.classList.toggle('hidden', tab !== 'fta');
@@ -997,7 +1077,8 @@ function switchTab(tab) {
   var fos = document.getElementById('form-output-section');
   if (fos) fos.classList.add('hidden');
 
-  if (tab === 'market') renderMarketBrowser();
+  if (tab === 'market')  renderMarketBrowser();
+  if (tab === 'imports') renderImportsBrowser();
 
   renderCart();
   recalcAll();
@@ -1024,14 +1105,12 @@ function wireConfig() {
   bind('cfg-settlement-name', 'settlementName');
   bind('cfg-settlement-type', 'settlementType');
   bind('cfg-specialisation',  'specialisation');
-  bind('cfg-population',      'population',           'config', function(v) { return Math.max(1, parseInt(v, 10) || 1); });
-  bind('cfg-non-matching',    'taxModifierPercent', 'config', function(v) { return Math.max(0, parseFloat(v) || 0); });
+  bind('cfg-population',      'population',         'config', function(v) { return Math.max(1, parseInt(v, 10) || 1); });
+  bind('cfg-non-matching',    'taxModifierPercent',  'config', function(v) { return Math.max(0, parseFloat(v) || 0); });
   bind('cfg-player-name',     'playerName');
   bind('cfg-date',            'date');
   bind('fta-client-name',     'ftaClientName',  'ftaConfig');
   bind('fta-per-person-limit','perPersonLimit',  'ftaConfig', function(v) { return Math.max(0, parseInt(v, 10) || 0); });
-
-  // date is free text — no default needed
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -1046,8 +1125,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (confirm('Clear all items from the cart?')) clearCart();
   });
 
-  // Snap FTA limit removed — free-entry number box now
-
   // Generate buttons
   var btnTax = document.getElementById('btn-generate-tax');
   if (btnTax) btnTax.addEventListener('click', function() { generateTaxForm(calcTax()); });
@@ -1061,33 +1138,47 @@ document.addEventListener('DOMContentLoaded', function() {
   // Wire config inputs
   wireConfig();
 
-  // Load data
+  // ── Load both data sources in parallel ────────────────────────────────
   var searchInput = document.getElementById('item-search');
   if (searchInput) searchInput.placeholder = 'Loading items\u2026';
 
-  loadItems().then(function(result) {
-    state.allItems = result.items;
-    updateCacheStatus(result.lastFetched, result.warning);
+  Promise.all([loadItems(), loadImports()]).then(function(results) {
+    var itemResult   = results[0];
+    var importResult = results[1];
+
+    // Main price sheet
+    state.allItems = itemResult.items;
+    updateCacheStatus(itemResult.lastFetched, itemResult.warning);
 
     if (searchInput) {
-      searchInput.disabled    = result.items.length === 0;
-      searchInput.placeholder = result.items.length > 0
-        ? ('Search ' + result.items.length + ' items by name or ID\u2026')
+      searchInput.disabled    = itemResult.items.length === 0;
+      searchInput.placeholder = itemResult.items.length > 0
+        ? ('Search ' + itemResult.items.length + ' items by name or ID\u2026')
         : 'Item data unavailable \u2014 check connection';
     }
 
-    if (result.items.length > 0) {
-      initSearch(result.items, function(item) { addItem(item); });
-      initMarketBrowser(result.items);
+    if (itemResult.items.length > 0) {
+      initSearch(itemResult.items, function(item) { addItem(item); });
+      initMarketBrowser(itemResult.items);
+    }
+
+    // Imports sheet
+    state.allImports = importResult.items;
+    if (importResult.items.length > 0) {
+      initImportsBrowser(importResult.items);
     }
   });
 
-  // Refresh button
+  // Refresh button — refreshes both sheets simultaneously
   var refreshBtn = document.getElementById('btn-refresh');
   if (refreshBtn) refreshBtn.addEventListener('click', function() {
     refreshBtn.disabled    = true;
     refreshBtn.textContent = 'Refreshing\u2026';
-    forceRefresh().then(function(r) {
+
+    Promise.all([forceRefresh(), forceRefreshImports()]).then(function(results) {
+      var r  = results[0];
+      var ri = results[1];
+
       state.allItems = r.items;
       updateSearchItems(r.items);
       refreshCartPrices(r.items);
@@ -1096,6 +1187,11 @@ document.addEventListener('DOMContentLoaded', function() {
       marketState.initialized = false;
       initMarketBrowser(r.items);
       if (state.activeTab === 'market') renderMarketBrowser();
+
+      state.allImports = ri.items;
+      importsState.initialized = false;
+      initImportsBrowser(ri.items);
+      if (state.activeTab === 'imports') renderImportsBrowser();
     }).catch(function() {
       updateCacheStatus(null, 'Refresh failed');
     }).then(function() {
@@ -1141,27 +1237,23 @@ function getTrendPct(item) {
 }
 
 function makeSparklinesVG(item) {
-  var cur  = item.currentPrice;
-  var last = item.lastPrice;
+  var cur   = item.currentPrice;
+  var last  = item.lastPrice;
   var trend = getTrend(item);
-
   var w = 72, h = 28;
   var colMap = { up: '#4ab87a', down: '#c94040', flat: '#9a8e68' };
   var col = colMap[trend];
 
   if (cur === null || last === null) {
-    // flat line
     return '<svg class="trend-sparkline" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
       '<line x1="4" y1="' + (h/2) + '" x2="' + (w-4) + '" y2="' + (h/2) + '" stroke="' + col + '" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.4"/>' +
       '</svg>';
   }
 
-  // Build a mini sparkline: 5 synthetic points bridging last -> cur with slight wave
   var pts = [];
   for (var i = 0; i < 5; i++) {
-    var t   = i / 4;
+    var t = i / 4;
     var val = last + (cur - last) * t;
-    // add tiny noise for visual interest (deterministic via item id hash)
     var noise = 0;
     if (item.id) {
       var code = 0;
@@ -1174,7 +1266,6 @@ function makeSparklinesVG(item) {
   var minV = Math.min.apply(null, pts);
   var maxV = Math.max.apply(null, pts);
   var range = maxV - minV || 1;
-
   var pad = 4;
   var coords = pts.map(function(v, i) {
     var x = pad + (i / (pts.length - 1)) * (w - pad * 2);
@@ -1182,27 +1273,19 @@ function makeSparklinesVG(item) {
     return x + ',' + y;
   });
 
-  // Area fill path
-  var first = coords[0].split(',');
-  var last_  = coords[coords.length - 1].split(',');
-  var areaPath = 'M' + coords.join(' L') +
-    ' L' + last_[0] + ',' + (h - pad) +
-    ' L' + first[0] + ',' + (h - pad) + ' Z';
-
-  // Line path
+  var first  = coords[0].split(',');
+  var lastC  = coords[coords.length - 1].split(',');
+  var areaPath = 'M' + coords.join(' L') + ' L' + lastC[0] + ',' + (h - pad) + ' L' + first[0] + ',' + (h - pad) + ' Z';
   var linePath = 'M' + coords.join(' L');
-
-  // Endpoint dot
   var ep = coords[coords.length - 1].split(',');
+  var gid = 'sg' + (item.id || 'x').replace(/[^a-z0-9]/gi, '');
 
   return '<svg class="trend-sparkline" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
-    '<defs>' +
-      '<linearGradient id="sg' + (item.id||'x').replace(/[^a-z0-9]/gi,'') + '" x1="0" y1="0" x2="0" y2="1">' +
-        '<stop offset="0%" stop-color="' + col + '" stop-opacity="0.25"/>' +
-        '<stop offset="100%" stop-color="' + col + '" stop-opacity="0.02"/>' +
-      '</linearGradient>' +
-    '</defs>' +
-    '<path d="' + areaPath + '" fill="url(#sg' + (item.id||'x').replace(/[^a-z0-9]/gi,'') + ')"/>' +
+    '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="' + col + '" stop-opacity="0.25"/>' +
+      '<stop offset="100%" stop-color="' + col + '" stop-opacity="0.02"/>' +
+    '</linearGradient></defs>' +
+    '<path d="' + areaPath + '" fill="url(#' + gid + ')"/>' +
     '<path d="' + linePath + '" fill="none" stroke="' + col + '" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>' +
     '<circle cx="' + ep[0] + '" cy="' + ep[1] + '" r="2.5" fill="' + col + '"/>' +
     '</svg>';
@@ -1216,13 +1299,10 @@ function initMarketBrowser(items) {
   if (catSel) {
     catSel.innerHTML = '<option value="">All Categories</option>';
     cats.forEach(function(c) {
-      var o = document.createElement('option');
-      o.value = c; o.textContent = c;
-      catSel.appendChild(o);
+      var o = document.createElement('option'); o.value = c; o.textContent = c; catSel.appendChild(o);
     });
   }
 
-  // Wire search & filters
   function wire(id, key) {
     var el = document.getElementById(id);
     if (!el) return;
@@ -1234,23 +1314,17 @@ function initMarketBrowser(items) {
   wire('market-trend-filter',  'trendFilter');
   wire('market-buying-filter', 'buyingFilter');
 
-  // Sortable column headers
   var thead = document.querySelector('#market-table thead');
   if (thead) {
     thead.querySelectorAll('th[data-col]').forEach(function(th) {
       th.addEventListener('click', function() {
         var col = th.dataset.col;
-        if (marketState.sortCol === col) {
-          marketState.sortDir = marketState.sortDir === 'asc' ? 'desc' : 'asc';
-        } else {
-          marketState.sortCol = col;
-          marketState.sortDir = 'asc';
-        }
+        marketState.sortDir = (marketState.sortCol === col && marketState.sortDir === 'asc') ? 'desc' : 'asc';
+        marketState.sortCol = col;
         renderMarketBrowser();
       });
     });
   }
-
   marketState.initialized = true;
 }
 
@@ -1261,10 +1335,8 @@ function renderMarketBrowser() {
     if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="market-empty">No market data available. Try refreshing.</td></tr>';
     return;
   }
-
   if (!marketState.initialized) initMarketBrowser(items);
 
-  // Filter
   var q = marketState.searchQuery.toLowerCase().trim();
   var filtered = items.filter(function(it) {
     if (q) {
@@ -1274,10 +1346,7 @@ function renderMarketBrowser() {
       if (!match) return false;
     }
     if (marketState.catFilter && it.category !== marketState.catFilter) return false;
-    if (marketState.trendFilter) {
-      var t = getTrend(it);
-      if (t !== marketState.trendFilter) return false;
-    }
+    if (marketState.trendFilter && getTrend(it) !== marketState.trendFilter) return false;
     if (marketState.buyingFilter) {
       var accepted = it.buying === true || it.buying === 'Yes' || it.buying === 'yes';
       if (marketState.buyingFilter === 'yes' && !accepted) return false;
@@ -1286,117 +1355,186 @@ function renderMarketBrowser() {
     return true;
   });
 
-  // Sort
   var col = marketState.sortCol;
   var dir = marketState.sortDir === 'asc' ? 1 : -1;
   filtered.sort(function(a, b) {
     var av, bv;
-    if (col === 'trend') {
-      var tmap = { up: 2, flat: 1, down: 0 };
-      av = tmap[getTrend(a)] || 0;
-      bv = tmap[getTrend(b)] || 0;
-    } else if (col === 'currentPrice') {
-      av = a.currentPrice || 0;
-      bv = b.currentPrice || 0;
-    } else if (col === 'lastPrice') {
-      av = a.lastPrice || 0;
-      bv = b.lastPrice || 0;
-    } else if (col === 'limit') {
-      av = (a.limit && a.limit !== 'NONE' && a.limit !== '') ? parseFloat(a.limit) || 0 : -1;
-      bv = (b.limit && b.limit !== 'NONE' && b.limit !== '') ? parseFloat(b.limit) || 0 : -1;
-    } else if (col === 'buying') {
-      av = (a.buying === true || a.buying === 'Yes' || a.buying === 'yes') ? 1 : 0;
-      bv = (b.buying === true || b.buying === 'Yes' || b.buying === 'yes') ? 1 : 0;
-    } else {
-      av = (a[col] || '').toString().toLowerCase();
-      bv = (b[col] || '').toString().toLowerCase();
-    }
-    if (av < bv) return -1 * dir;
-    if (av > bv) return  1 * dir;
-    return 0;
+    if      (col === 'trend')        { var tmap={up:2,flat:1,down:0}; av=tmap[getTrend(a)]||0; bv=tmap[getTrend(b)]||0; }
+    else if (col === 'currentPrice') { av=a.currentPrice||0; bv=b.currentPrice||0; }
+    else if (col === 'lastPrice')    { av=a.lastPrice||0;    bv=b.lastPrice||0; }
+    else if (col === 'limit')        { av=(a.limit&&a.limit!=='NONE'&&a.limit!=='')?parseFloat(a.limit)||0:-1; bv=(b.limit&&b.limit!=='NONE'&&b.limit!=='')?parseFloat(b.limit)||0:-1; }
+    else if (col === 'buying')       { av=(a.buying===true||a.buying==='Yes'||a.buying==='yes')?1:0; bv=(b.buying===true||b.buying==='Yes'||b.buying==='yes')?1:0; }
+    else { av=(a[col]||'').toString().toLowerCase(); bv=(b[col]||'').toString().toLowerCase(); }
+    return av < bv ? -dir : av > bv ? dir : 0;
   });
 
-  // Stats
-  var rising = 0, falling = 0, stable = 0, priceSum = 0, priceCount = 0;
+  var rising=0, falling=0, stable=0, priceSum=0, priceCount=0;
   filtered.forEach(function(it) {
-    var t = getTrend(it);
-    if (t === 'up')   rising++;
-    if (t === 'down') falling++;
-    if (t === 'flat') stable++;
-    if (it.currentPrice !== null && it.currentPrice !== undefined) {
-      priceSum += it.currentPrice; priceCount++;
-    }
+    var t=getTrend(it); if(t==='up')rising++; if(t==='down')falling++; if(t==='flat')stable++;
+    if(it.currentPrice!=null){ priceSum+=it.currentPrice; priceCount++; }
   });
 
-  var setEl = function(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
-  setEl('ms-count',   filtered.length);
-  setEl('ms-rising',  rising);
-  setEl('ms-falling', falling);
-  setEl('ms-stable',  stable);
-  setEl('ms-avg',     priceCount > 0 ? (priceSum / priceCount).toFixed(4) : '—');
+  var setEl = function(id,v){ var el=document.getElementById(id); if(el)el.textContent=v; };
+  setEl('ms-count', filtered.length); setEl('ms-rising', rising); setEl('ms-falling', falling);
+  setEl('ms-stable', stable); setEl('ms-avg', priceCount>0?(priceSum/priceCount).toFixed(4):'—');
 
-  // Update sort indicators
   var thead = document.querySelector('#market-table thead');
   if (thead) {
     thead.querySelectorAll('th[data-col]').forEach(function(th) {
-      th.classList.remove('sort-asc', 'sort-desc');
-      if (th.dataset.col === col) th.classList.add('sort-' + marketState.sortDir);
+      th.classList.remove('sort-asc','sort-desc');
+      if (th.dataset.col===col) th.classList.add('sort-'+marketState.sortDir);
     });
   }
 
-  // Render rows
   var tbody = document.getElementById('market-tbody');
   if (!tbody) return;
-
   if (filtered.length === 0) {
     tbody.innerHTML = '<tr><td colspan="8" class="market-empty">No items match your search.</td></tr>';
-    var cnt = document.getElementById('market-count'); if (cnt) cnt.textContent = '';
-    return;
+    var cnt=document.getElementById('market-count'); if(cnt)cnt.textContent=''; return;
   }
 
   var html = '';
   filtered.forEach(function(it) {
-    var trend    = getTrend(it);
-    var trendPct = getTrendPct(it);
-    var trendLabel = trend === 'up'   ? '▲ +' + Math.abs(trendPct).toFixed(1) + '%'
-                   : trend === 'down' ? '▼ −' + Math.abs(trendPct).toFixed(1) + '%'
-                   : '━ 0.0%';
+    var trend=getTrend(it), trendPct=getTrendPct(it);
+    var trendLabel = trend==='up' ? '▲ +'+Math.abs(trendPct).toFixed(1)+'%' : trend==='down' ? '▼ −'+Math.abs(trendPct).toFixed(1)+'%' : '━ 0.0%';
     var spark    = makeSparklinesVG(it);
-    var cur      = it.currentPrice !== null && it.currentPrice !== undefined
-                   ? it.currentPrice.toFixed(4) : '—';
-    var lastP    = it.lastPrice !== null && it.lastPrice !== undefined
-                   ? it.lastPrice.toFixed(4) : '—';
-    var limitStr = (it.limit && it.limit !== 'NONE' && it.limit !== '') ? it.limit : '—';
-    var accepted = it.buying === true || it.buying === 'Yes' || it.buying === 'yes';
+    var cur      = it.currentPrice!=null ? it.currentPrice.toFixed(4) : '—';
+    var lastP    = it.lastPrice!=null    ? it.lastPrice.toFixed(4)    : '—';
+    var limitStr = (it.limit&&it.limit!=='NONE'&&it.limit!=='') ? it.limit : '—';
+    var accepted = it.buying===true||it.buying==='Yes'||it.buying==='yes';
     var buyingHtml = accepted
       ? '<span class="buying-dot" title="Accepted"></span>'
       : '<span class="not-buying-dash" title="Not Accepted">✕</span>';
 
     html += '<tr>' +
-      '<td class="mt-id">'  + (it.id || '—') + '</td>' +
-      '<td class="mt-name">' + escHtml(it.name || '—') + '</td>' +
-      '<td class="mt-cat"><span class="mt-cat-badge">' + escHtml(it.category || '—') + '</span></td>' +
+      '<td class="mt-id">' + (it.id||'—') + '</td>' +
+      '<td class="mt-name">' + escHtml(it.name||'—') + '</td>' +
+      '<td class="mt-cat"><span class="mt-cat-badge">' + escHtml(it.category||'—') + '</span></td>' +
       '<td class="mt-price">' + cur + '</td>' +
       '<td class="mt-last-price">' + lastP + '</td>' +
-      '<td class="mt-trend-cell">' +
-        '<div class="trend-container">' +
-          spark +
-          '<span class="trend-badge ' + trend + '">' + trendLabel + '</span>' +
-        '</div>' +
-      '</td>' +
+      '<td class="mt-trend-cell"><div class="trend-container">' + spark + '<span class="trend-badge '+trend+'">' + trendLabel + '</span></div></td>' +
       '<td class="mt-limit">' + limitStr + '</td>' +
       '<td class="mt-buying">' + buyingHtml + '</td>' +
       '</tr>';
   });
 
   tbody.innerHTML = html;
-
-  var cnt = document.getElementById('market-count');
-  if (cnt) cnt.textContent = 'Showing ' + filtered.length + ' of ' + items.length + ' items';
+  var cnt=document.getElementById('market-count');
+  if(cnt) cnt.textContent='Showing '+filtered.length+' of '+items.length+' items';
 }
 
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// ═══════════════════════════════════════════════════════════════════════════
+// EMPIRE IMPORTS BROWSER
+// Displays items where FTA Buying? is "Yes". BUYING/SELLING column omitted.
+// ═══════════════════════════════════════════════════════════════════════════
+
+var importsState = {
+  sortCol: 'name',
+  sortDir: 'asc',
+  searchQuery: '',
+  catFilter: '',
+  initialized: false,
+};
+
+function initImportsBrowser(items) {
+  var catSet = {};
+  items.forEach(function(it) { if (it.category) catSet[it.category] = 1; });
+  var cats = Object.keys(catSet).sort();
+
+  var catSel = document.getElementById('imports-cat-filter');
+  if (catSel) {
+    catSel.innerHTML = '<option value="">All Categories</option>';
+    cats.forEach(function(c) {
+      var o = document.createElement('option'); o.value = c; o.textContent = c; catSel.appendChild(o);
+    });
+  }
+
+  function wire(id, key) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input',  function() { importsState[key] = el.value; renderImportsBrowser(); });
+    el.addEventListener('change', function() { importsState[key] = el.value; renderImportsBrowser(); });
+  }
+  wire('imports-search',     'searchQuery');
+  wire('imports-cat-filter', 'catFilter');
+
+  var thead = document.querySelector('#imports-table thead');
+  if (thead) {
+    thead.querySelectorAll('th[data-col]').forEach(function(th) {
+      th.addEventListener('click', function() {
+        var col = th.dataset.col;
+        importsState.sortDir = (importsState.sortCol === col && importsState.sortDir === 'asc') ? 'desc' : 'asc';
+        importsState.sortCol = col;
+        renderImportsBrowser();
+      });
+    });
+  }
+  importsState.initialized = true;
 }
 
+function renderImportsBrowser() {
+  var items = state.allImports;
+  var tbody = document.getElementById('imports-tbody');
 
+  if (!items || items.length === 0) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="market-empty">No imports data available. Try refreshing.</td></tr>';
+    var cnt = document.getElementById('imports-count'); if (cnt) cnt.textContent = '';
+    return;
+  }
+
+  if (!importsState.initialized) initImportsBrowser(items);
+
+  var q = importsState.searchQuery.toLowerCase().trim();
+  var filtered = items.filter(function(it) {
+    if (q) {
+      var match = (it.name && it.name.toLowerCase().indexOf(q) >= 0) ||
+                  (it.id   && it.id.toLowerCase().indexOf(q)   >= 0) ||
+                  (it.category && it.category.toLowerCase().indexOf(q) >= 0);
+      if (!match) return false;
+    }
+    if (importsState.catFilter && it.category !== importsState.catFilter) return false;
+    return true;
+  });
+
+  var col = importsState.sortCol;
+  var dir = importsState.sortDir === 'asc' ? 1 : -1;
+  filtered.sort(function(a, b) {
+    var av = col === 'price' ? (a.price || 0) : (a[col] || '').toString().toLowerCase();
+    var bv = col === 'price' ? (b.price || 0) : (b[col] || '').toString().toLowerCase();
+    return av < bv ? -dir : av > bv ? dir : 0;
+  });
+
+  var thead = document.querySelector('#imports-table thead');
+  if (thead) {
+    thead.querySelectorAll('th[data-col]').forEach(function(th) {
+      th.classList.remove('sort-asc', 'sort-desc');
+      if (th.dataset.col === col) th.classList.add('sort-' + importsState.sortDir);
+    });
+  }
+
+  var setEl = function(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+  setEl('imp-count', filtered.length);
+
+  if (!tbody) return;
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="market-empty">No items match your search.</td></tr>';
+    var cnt = document.getElementById('imports-count'); if (cnt) cnt.textContent = ''; return;
+  }
+
+  var html = '';
+  filtered.forEach(function(it) {
+    var priceStr = (it.price !== null && it.price !== undefined) ? it.price.toFixed(2) : '—';
+    html += '<tr>' +
+      '<td class="mt-id">'    + escHtml(it.id       || '—') + '</td>' +
+      '<td class="mt-name">'  + escHtml(it.name     || '—') + '</td>' +
+      '<td class="mt-cat"><span class="mt-cat-badge">' + escHtml(it.category || '—') + '</span></td>' +
+      '<td class="imp-unit">' + escHtml(it.unit     || '—') + '</td>' +
+      '<td class="mt-price">' + priceStr + '</td>' +
+      '</tr>';
+  });
+
+  tbody.innerHTML = html;
+  var cnt = document.getElementById('imports-count');
+  if (cnt) cnt.textContent = 'Showing ' + filtered.length + ' of ' + items.length + ' accepted items';
+}

@@ -113,6 +113,9 @@
       <button class="tab-btn" data-tab="market" role="tab">
         <span class="tab-icon">⚜</span> Market Browser
       </button>
+      <button class="tab-btn" data-tab="imports" role="tab">
+        <span class="tab-icon">📦</span> Empire Imports
+      </button>
     </div>
 
     <!-- ═══ FTA-SPECIFIC INPUTS (only shown on FTA tab) ══════════════════ -->
@@ -128,12 +131,14 @@
           <label class="field-label" for="fta-per-person-limit">Per-Person Limit</label>
           <input id="fta-per-person-limit" type="number" class="field-input"
                  min="0" value="150" placeholder="150">
+        </div>
+      </div>
     </section>
 
     <!-- FTA weekly cap warning -->
     <div id="fta-cap-warning" class="alert alert-amber hidden"></div>
 
-    <!-- ═══ ITEM SEARCH (hidden on market tab) ══════════════════════════ -->
+    <!-- ═══ ITEM SEARCH (hidden on market/imports tabs) ══════════════════ -->
     <section class="panel search-panel" aria-label="Item Search" id="item-search-panel">
       <h2 class="panel-title"><span class="panel-title-icon">🔍</span> Add Items</h2>
       <div class="search-wrap">
@@ -144,7 +149,7 @@
       </div>
     </section>
 
-    <!-- ═══ CART (shared, hidden on market tab) ══════════════════════════ -->
+    <!-- ═══ CART (shared, hidden on market/imports tabs) ════════════════ -->
     <section class="panel cart-panel" aria-label="Cart" id="cart-panel">
       <div class="cart-header">
         <h2 class="panel-title"><span class="panel-title-icon">🛒</span> Cart</h2>
@@ -174,7 +179,7 @@
       </div>
     </section>
 
-    <!-- ═══ CALCULATIONS (hidden on market tab) ═══════════════════════════ -->
+    <!-- ═══ CALCULATIONS (hidden on market/imports tabs) ═════════════════ -->
     <section class="panel calc-panel" aria-label="Calculations" id="calc-panel">
       <h2 class="panel-title" id="calc-panel-title">
         <span class="panel-title-icon">⚖️</span> Tax Calculations
@@ -213,7 +218,7 @@
     </section>
 
     <!-- ═══ MARKET BROWSER ═══════════════════════════════════════════════ -->
-    <section class="panel" id="market-browser-panel" aria-label="Market Browser">
+    <section class="panel" id="market-browser-panel" aria-label="Market Browser" style="display:none">
       <h2 class="panel-title">
         <span class="panel-title-icon">⚜</span> Market Browser
       </h2>
@@ -293,12 +298,62 @@
       <div class="market-count" id="market-count"></div>
     </section>
 
+    <!-- ═══ EMPIRE IMPORTS ════════════════════════════════════════════════ -->
+    <section class="panel" id="imports-browser-panel" aria-label="Empire Imports" style="display:none">
+      <h2 class="panel-title">
+        <span class="panel-title-icon">📦</span> Empire Imports
+      </h2>
+      <p class="imports-intro">
+        Items the Empire is currently importing to Faelyn. Updated periodically
+      </p>
+
+      <div class="market-toolbar">
+        <div class="market-search-wrap">
+          <input id="imports-search" type="text" class="market-search"
+                 placeholder="Search by name, ID or category…" autocomplete="off">
+        </div>
+        <div class="market-filter-group">
+          <span class="market-filter-label">Category</span>
+          <select id="imports-cat-filter" class="market-filter-select">
+            <option value="">All Categories</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="market-stats-bar">
+        <div class="market-stat">
+          <span class="market-stat-label">Items Shown</span>
+          <span class="market-stat-value" id="imp-count">—</span>
+        </div>
+      </div>
+
+      <div class="market-table-wrap">
+        <table class="market-table" id="imports-table">
+          <thead>
+            <tr>
+              <th data-col="id">ID <span class="sort-icon">⇅</span></th>
+              <th data-col="name">Item Name <span class="sort-icon">⇅</span></th>
+              <th data-col="category">Category <span class="sort-icon">⇅</span></th>
+              <th data-col="unit">Qty. Unit <span class="sort-icon">⇅</span></th>
+              <th data-col="price">Price <span class="sort-icon">⇅</span></th>
+            </tr>
+          </thead>
+          <tbody id="imports-tbody">
+            <tr><td colspan="5" class="market-empty">Loading imports data…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="market-count" id="imports-count"></div>
+    </section>
+
   </main>
 
   <footer class="site-footer">
     <p>Empire Economy Calculator — data sourced from the public Empire price sheet · Prices refresh every 4 hours</p>
   </footer>
 
+  <!-- config.js must be loaded before app.js — it defines all constants app.js uses -->
+  <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

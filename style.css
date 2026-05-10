@@ -1133,3 +1133,24 @@ body {
 .kofi-header-btn__text {
   line-height: 1;
 }
+
+/* ─── Empire Imports Tab ─────────────────────────────────────────────────── */
+.imports-intro {
+  font-size: .92rem;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  line-height: 1.5;
+  border-left: 2px solid var(--border-gold);
+  padding-left: 12px;
+}
+
+.imports-intro strong {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.imp-unit {
+  color: var(--text-secondary);
+  font-size: .88rem;
+  text-align: center;
+}
