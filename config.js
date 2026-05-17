@@ -35,10 +35,10 @@ var MAX_AGE_MS = 4 * 60 * 60 * 1000;  // 4 hours
 // Hamlet is always 0 — no tax form is generated for it.
 var TAX_RATE = {
   Hamlet:  0,
-  Village: 100,
-  Town:    125,
-  City:    150,
-  Capital: 150,
+  Village: 200,
+  Town:    250,
+  City:    300,
+  Capital: 300,
 };
 
 // Buyback cap multiplier applied to the final tax due.
@@ -67,7 +67,7 @@ var FTA_MARKUP = 1.25;
 // Format: { upTo: <maxFtaPrice>, rate: <fractionTakenByFTA> }
 // The last bracket's upTo value is ignored — it always catches the remainder.
 var FTA_CUT_BRACKETS = [
-  { upTo: 3000,      rate: 0.10 },   // 10% FTA cut on sales up to 3000 coins
-  { upTo: 4000,      rate: 0.25 },   // 25% FTA cut on sales 3001–4000 coins
-  { upTo: Infinity,  rate: 0.40 },   // 40% FTA cut on sales above 4000 coins
+  { upTo: 3000,      rate: 0.05 },   // 5% FTA cut on sales up to 3000 coins
+  { upTo: 4000,      rate: 0.10 },   // 10% FTA cut on sales 3001–4000 coins
+  { upTo: Infinity,  rate: 0.25 },   // 25% FTA cut on sales above 4000 coins
 ];
